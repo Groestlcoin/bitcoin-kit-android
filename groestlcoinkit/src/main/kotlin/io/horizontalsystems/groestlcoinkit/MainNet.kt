@@ -1,4 +1,4 @@
-package io.horizontalsystems.bitcoinkit
+package io.horizontalsystems.groestlcoinkit
 
 import io.horizontalsystems.bitcoincore.models.Block
 import io.horizontalsystems.bitcoincore.network.Network

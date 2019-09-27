@@ -1,4 +1,4 @@
-package io.horizontalsystems.dashkit
+package io.horizontalsystems.groestlcoinkit
 
 import fr.cryptohash.*
 import io.horizontalsystems.bitcoincore.core.IHasher

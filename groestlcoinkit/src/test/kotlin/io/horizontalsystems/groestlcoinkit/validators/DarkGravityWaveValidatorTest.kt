@@ -1,4 +1,4 @@
-package io.horizontalsystems.dashkit.validators
+package io.horizontalsystems.groestlcoinkit.validators
 
 import com.nhaarman.mockito_kotlin.doReturn
 import com.nhaarman.mockito_kotlin.mock
@@ -29,7 +29,7 @@ class DarkGravityWaveValidatorTest : Spek({
     val heightInterval = 24
 
     val validator by memoized {
-        DarkGravityWaveValidator(blockHelper, 24, 3600, 0x1e0fffff, 0)
+        DarkGravityWaveValidator(blockHelper, 24, 3600, 0x1e0fffff, 0, 100000)
     }
 
     describe("#validate") {

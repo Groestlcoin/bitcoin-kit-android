@@ -1,4 +1,4 @@
-package io.horizontalsystems.bitcoinkit
+package io.horizontalsystems.groestlcoinkit
 
 import io.horizontalsystems.bitcoincore.io.BitcoinInput
 import org.junit.Assert.assertEquals

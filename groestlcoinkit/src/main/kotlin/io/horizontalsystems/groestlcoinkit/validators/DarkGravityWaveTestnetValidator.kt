@@ -1,4 +1,4 @@
-package io.horizontalsystems.dashkit.validators
+package io.horizontalsystems.groestlcoinkit.validators
 
 import io.horizontalsystems.bitcoincore.blocks.validators.BlockValidatorException
 import io.horizontalsystems.bitcoincore.blocks.validators.IBlockValidator

@@ -1,4 +1,4 @@
-package io.horizontalsystems.bitcoinkit
+package io.horizontalsystems.groestlcoinkit
 
 import io.horizontalsystems.bitcoincore.extensions.hexToByteArray
 import io.horizontalsystems.bitcoincore.extensions.toReversedByteArray

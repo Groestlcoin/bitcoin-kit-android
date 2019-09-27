@@ -1,4 +1,4 @@
-package io.horizontalsystems.bitcoinkit
+package io.horizontalsystems.groestlcoinkit
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
@@ -18,7 +18,7 @@ import io.horizontalsystems.bitcoincore.storage.CoreDatabase
 import io.horizontalsystems.bitcoincore.storage.Storage
 import io.horizontalsystems.bitcoincore.utils.PaymentAddressParser
 import io.horizontalsystems.bitcoincore.utils.SegwitAddressConverter
-import io.horizontalsystems.dashkit.core.SingleSha256Hasher
+import io.horizontalsystems.groestlcoinkit.core.SingleSha256Hasher
 import io.horizontalsystems.hdwalletkit.Mnemonic
 import io.reactivex.Single
 

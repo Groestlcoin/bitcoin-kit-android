@@ -1,4 +1,4 @@
-package io.horizontalsystems.dashkit.core
+package io.horizontalsystems.groestlcoinkit.core
 
 import io.horizontalsystems.bitcoincore.core.IHasher
 import io.horizontalsystems.bitcoincore.utils.HashUtils
