@@ -11,12 +11,14 @@ import io.horizontalsystems.bitcoincore.blocks.validators.LegacyTestNetDifficult
 import io.horizontalsystems.bitcoincore.core.Bip
 import io.horizontalsystems.bitcoincore.managers.BCoinApi
 import io.horizontalsystems.bitcoincore.managers.BlockValidatorHelper
+import io.horizontalsystems.bitcoincore.managers.InsightApi
 import io.horizontalsystems.bitcoincore.models.TransactionInfo
 import io.horizontalsystems.bitcoincore.network.Network
 import io.horizontalsystems.bitcoincore.storage.CoreDatabase
 import io.horizontalsystems.bitcoincore.storage.Storage
 import io.horizontalsystems.bitcoincore.utils.PaymentAddressParser
 import io.horizontalsystems.bitcoincore.utils.SegwitAddressConverter
+import io.horizontalsystems.dashkit.core.SingleSha256Hasher
 import io.horizontalsystems.hdwalletkit.Mnemonic
 import io.reactivex.Single
 
@@ -24,7 +26,6 @@ class GroestlcoinKit : AbstractKit {
     enum class NetworkType {
         MainNet,
         TestNet,
-        RegTest
     }
 
     interface Listener : BitcoinCore.Listener
@@ -65,18 +66,17 @@ class GroestlcoinKit : AbstractKit {
 
         network = when (networkType) {
             NetworkType.MainNet -> {
-                initialSyncUrl = "https://btc.horizontalsystems.xyz/apg"
+                initialSyncUrl = "https://groestlsight.groestlcoin.org/api"
                 MainNet()
             }
             NetworkType.TestNet -> {
-                initialSyncUrl = "http://btc-testnet.horizontalsystems.xyz/apg"
+                initialSyncUrl = "https://groestlsight-test.groestlcoin.org/api"
                 TestNet()
             }
-            NetworkType.RegTest -> RegTest()
         }
 
-        val paymentAddressParser = PaymentAddressParser("bitcoin", removeScheme = true)
-        val initialSyncApi = BCoinApi(initialSyncUrl)
+        val paymentAddressParser = PaymentAddressParser("groestlcoin", removeScheme = true)
+        val initialSyncApi = InsightApi(initialSyncUrl)
 
         bitcoinCore = BitcoinCoreBuilder()
                 .setContext(context)
@@ -120,6 +120,9 @@ class GroestlcoinKit : AbstractKit {
                 bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP84)
             }
         }
+
+        val singleHasher = SingleSha256Hasher()
+
     }
 
     fun transactions(fromHash: String? = null, limit: Int? = null): Single<List<TransactionInfo>> {

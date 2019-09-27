@@ -21,7 +21,7 @@ class TestNet : Network() {
 
     override var dnsSeeds = listOf(
             "testnet-seed1.groestlcoin.org",
-            "testnet-seed2.groestlcoin.org",
+            "testnet-seed2.groestlcoin.org"
     )
 
     override val bip44CheckpointBlock = Block(BlockHeader(
