@@ -29,7 +29,7 @@ import io.horizontalsystems.hdwalletkit.Mnemonic
 import io.reactivex.Single
 import java.util.concurrent.Executor
 
-class BitcoinCoreBuilder {
+open class BitcoinCoreBuilder {
 
     // required parameters
     private var context: Context? = null
@@ -63,7 +63,7 @@ class BitcoinCoreBuilder {
         return this
     }
 
-    fun setNetwork(network: Network): BitcoinCoreBuilder {
+    open fun setNetwork(network: Network): BitcoinCoreBuilder {
         this.network = network
         return this
     }
@@ -113,7 +113,7 @@ class BitcoinCoreBuilder {
         return this
     }
 
-    fun build(): BitcoinCore {
+    open fun build(): BitcoinCore {
         val context = checkNotNull(this.context)
         val seed = checkNotNull(this.seed ?: words?.let { Mnemonic().toSeed(it) })
         val network = checkNotNull(this.network)
@@ -231,6 +231,8 @@ class BitcoinCoreBuilder {
                 .addMessageParser(VersionMessageParser())
                 .addMessageParser(RejectMessageParser())
 
+
+
         bitcoinCore.addMessageSerializer(FilterLoadMessageSerializer())
                 .addMessageSerializer(GetBlocksMessageSerializer())
                 .addMessageSerializer(InvMessageSerializer())
@@ -315,9 +317,16 @@ class BitcoinCore(
         return this
     }
 
+    fun removeMessageParser(messageParser: IMessageParser) {
+        networkMessageParser.remove(messageParser)
+    }
+
     fun addMessageSerializer(messageSerializer: IMessageSerializer): BitcoinCore {
         networkMessageSerializer.add(messageSerializer)
         return this
+    }
+    fun removeMessageSerializer(messageSerializer: IMessageSerializer) {
+        networkMessageSerializer.remove(messageSerializer)
     }
 
     fun addInventoryItemsHandler(handler: IInventoryItemsHandler) {

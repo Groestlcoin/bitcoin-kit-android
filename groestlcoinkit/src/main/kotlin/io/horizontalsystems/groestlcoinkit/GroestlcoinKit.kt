@@ -78,7 +78,7 @@ class GroestlcoinKit : AbstractKit {
         val paymentAddressParser = PaymentAddressParser("groestlcoin", removeScheme = true)
         val initialSyncApi = InsightApi(initialSyncUrl)
 
-        bitcoinCore = BitcoinCoreBuilder()
+        bitcoinCore = GroestlcoinCoreBuilder()
                 .setContext(context)
                 .setSeed(seed)
                 .setNetwork(network)

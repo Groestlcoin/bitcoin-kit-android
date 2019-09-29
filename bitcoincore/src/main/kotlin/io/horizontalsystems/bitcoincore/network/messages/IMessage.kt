@@ -77,9 +77,13 @@ class NetworkMessageParser(private val magic: Long) {
         val hash = HashUtils.doubleSha256(payload)
         return Arrays.copyOfRange(hash, 0, 4)
     }
+
+    fun remove(messageParser: IMessageParser) {
+        messageParsers.remove(messageParser.command)
+    }
 }
 
-class NetworkMessageSerializer(private val magic: Long) {
+open class NetworkMessageSerializer(private val magic: Long) {
     private var messageSerializers = mutableListOf<IMessageSerializer>()
 
     fun serialize(msg: IMessage): ByteArray {
@@ -122,9 +126,13 @@ class NetworkMessageSerializer(private val magic: Long) {
         return buffer
     }
 
-    private fun getCheckSum(payload: ByteArray): ByteArray {
+    open fun getCheckSum(payload: ByteArray): ByteArray {
         val hash = HashUtils.doubleSha256(payload)
         return Arrays.copyOfRange(hash, 0, 4)
+    }
+
+    fun remove(messageSerializer: IMessageSerializer) {
+        messageSerializers.remove(messageSerializer)
     }
 }
 
