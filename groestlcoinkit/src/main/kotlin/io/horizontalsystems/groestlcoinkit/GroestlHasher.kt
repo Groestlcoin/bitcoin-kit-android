@@ -19,4 +19,9 @@ class GroestlHasher : IHasher {
 
         return Arrays.copyOfRange(hash, 0, 32)
     }
+
+}
+
+fun groestlhash(data: ByteArray): ByteArray {
+    return GroestlHasher().hash(data)
 }

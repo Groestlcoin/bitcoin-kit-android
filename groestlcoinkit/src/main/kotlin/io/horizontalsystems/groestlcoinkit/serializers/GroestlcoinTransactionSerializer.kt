@@ -13,7 +13,7 @@ import io.horizontalsystems.bitcoincore.transactions.scripts.OpCodes
 import io.horizontalsystems.bitcoincore.transactions.scripts.ScriptType
 import io.horizontalsystems.bitcoincore.utils.HashUtils
 
-object TransactionSerializer {
+object GroestlcoinTransactionSerializer {
     fun deserialize(input: BitcoinInput): FullTransaction {
         val transaction = Transaction()
         val inputs = mutableListOf<TransactionInput>()
