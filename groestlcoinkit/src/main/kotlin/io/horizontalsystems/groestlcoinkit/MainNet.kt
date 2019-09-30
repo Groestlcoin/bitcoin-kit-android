@@ -33,7 +33,7 @@ class MainNet : Network() {
             timestamp = 1395495671,
             bits = 0x1e0fffff,
             nonce = 2623799296,
-            hash = HashUtils.toBytesAsLE("00000973d52019a3fdda1b1f346e1d76cbf12f8fdd9fbf0ade33bc1da89cb2e9 ")
+            hash = HashUtils.toBytesAsLE("00000973d52019a3fdda1b1f346e1d76cbf12f8fdd9fbf0ade33bc1da89cb2e9")
     ), 1)
 
     override val lastCheckpointBlock = Block(BlockHeader(
@@ -43,6 +43,6 @@ class MainNet : Network() {
             timestamp = 1567468782,
             bits = 0x1a2836de,
             nonce = 529959857,
-            hash = HashUtils.toBytesAsLE("000000000000032ad22aabbaf6350d5a50174b905e61e3dfec8bba41d5f755cc ")
+            hash = HashUtils.toBytesAsLE("000000000000032ad22aabbaf6350d5a50174b905e61e3dfec8bba41d5f755cc")
     ), 2738651)
 }
