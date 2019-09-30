@@ -4,8 +4,8 @@ import io.horizontalsystems.bitcoincore.BitcoinCore
 import io.horizontalsystems.bitcoincore.BitcoinCoreBuilder
 import io.horizontalsystems.bitcoincore.network.Network
 import io.horizontalsystems.bitcoincore.network.messages.*
-import io.horizontalsystems.bitcoincore.utils.GroestlcoinBase58AddressConverter
 import io.horizontalsystems.groestlcoinkit.network.messages.GroestlcoinNetworkMessageSerializer
+import io.horizontalsystems.groestlcoinkit.utils.GroestlcoinBase58AddressConverter
 
 class GroestlcoinCoreBuilder : BitcoinCoreBuilder {
 
