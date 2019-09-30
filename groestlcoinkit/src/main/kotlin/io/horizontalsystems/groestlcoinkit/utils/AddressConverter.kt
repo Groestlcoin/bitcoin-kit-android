@@ -1,6 +1,6 @@
-package io.horizontalsystems.bitcoincore.utils
+package io.horizontalsystems.groestlcoinkit.utils
 
-import crypto.GroestlcoinBase58
+import io.horizontalsystems.groestlcoinkit.crypto.GroestlcoinBase58
 import io.horizontalsystems.bitcoincore.crypto.Base58
 import io.horizontalsystems.bitcoincore.exceptions.AddressFormatException
 import io.horizontalsystems.bitcoincore.models.Address
@@ -8,6 +8,7 @@ import io.horizontalsystems.bitcoincore.models.AddressType
 import io.horizontalsystems.bitcoincore.models.LegacyAddress
 import io.horizontalsystems.bitcoincore.models.PublicKey
 import io.horizontalsystems.bitcoincore.transactions.scripts.ScriptType
+import io.horizontalsystems.bitcoincore.utils.IAddressConverter
 import io.horizontalsystems.groestlcoinkit.GroestlHasher
 import java.util.*
 

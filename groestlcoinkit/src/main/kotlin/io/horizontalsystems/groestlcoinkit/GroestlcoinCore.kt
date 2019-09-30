@@ -15,12 +15,12 @@ class GroestlcoinCoreBuilder : BitcoinCoreBuilder {
 
     override fun setNetwork(network: Network): BitcoinCoreBuilder {
         this.network = network
+        super.setNetwork(network)
         return this
     }
 
     override fun build(): BitcoinCore {
         val network = checkNotNull(this.network)
-        super.setNetwork(network)
         val bitcoinCore : BitcoinCore = super.build()
         bitcoinCore.networkMessageSerializer = GroestlcoinNetworkMessageSerializer(network.magic)
         bitcoinCore.removeMessageParser(TransactionMessageParser())
