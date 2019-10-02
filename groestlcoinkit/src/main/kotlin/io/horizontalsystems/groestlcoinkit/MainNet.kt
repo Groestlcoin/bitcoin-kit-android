@@ -23,7 +23,13 @@ class MainNet : Network() {
             "dnsseed1.groestlcoin.org",
             "dnsseed2.groestlcoin.org",
             "dnsseed3.groestlcoin.org",
-            "dnsseed4.groestlcoin.org"
+            "dnsseed4.groestlcoin.org",
+            "groestlsight.groestlcoin.org",
+            "groestlcoin.org",
+            "electrum1.groestlcoin.org",
+            "electrum2.groestlcoin.org",
+            "electrum20.groestlcoin.org",
+            "jswallet.groestlcoin.org"
     )
 
     override val bip44CheckpointBlock = Block(BlockHeader(
