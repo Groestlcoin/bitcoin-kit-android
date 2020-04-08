@@ -3,22 +3,22 @@ package io.horizontalsystems.bitcoincore.network.peer
 import io.horizontalsystems.bitcoincore.models.InventoryItem
 import io.horizontalsystems.bitcoincore.network.peer.task.PeerTask
 import io.horizontalsystems.bitcoincore.network.peer.task.RequestTransactionsTask
-import io.horizontalsystems.bitcoincore.network.peer.task.SendTransactionTask
+import io.horizontalsystems.bitcoincore.transactions.TransactionSender
 import io.horizontalsystems.bitcoincore.transactions.TransactionSyncer
 
-class MempoolTransactions(var transactionSyncer: TransactionSyncer) : IPeerTaskHandler, IInventoryItemsHandler, PeerGroup.Listener {
+class MempoolTransactions(
+        private val transactionSyncer: TransactionSyncer,
+        private val transactionSender: TransactionSender
+) : IPeerTaskHandler, IInventoryItemsHandler, PeerGroup.Listener {
 
     private val requestedTransactions = hashMapOf<String, MutableList<ByteArray>>()
 
     override fun handleCompletedTask(peer: Peer, task: PeerTask): Boolean {
         return when (task) {
             is RequestTransactionsTask -> {
-                transactionSyncer.handleTransactions(task.transactions)
+                transactionSyncer.handleRelayed(task.transactions)
                 removeFromRequestedTransactions(peer.host, task.transactions.map { it.header.hash })
-                true
-            }
-            is SendTransactionTask -> {
-                transactionSyncer.handleTransaction(task.transaction)
+                transactionSender.transactionsRelayed(task.transactions)
                 true
             }
             else -> false

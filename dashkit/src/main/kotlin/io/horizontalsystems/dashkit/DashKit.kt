@@ -4,20 +4,21 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import io.horizontalsystems.bitcoincore.AbstractKit
 import io.horizontalsystems.bitcoincore.BitcoinCore
+import io.horizontalsystems.bitcoincore.BitcoinCore.SyncMode
 import io.horizontalsystems.bitcoincore.BitcoinCoreBuilder
-import io.horizontalsystems.bitcoincore.core.BaseTransactionInfoConverter
-import io.horizontalsystems.bitcoincore.core.Bip
+import io.horizontalsystems.bitcoincore.blocks.validators.BlockValidatorChain
+import io.horizontalsystems.bitcoincore.blocks.validators.BlockValidatorSet
+import io.horizontalsystems.bitcoincore.blocks.validators.ProofOfWorkValidator
 import io.horizontalsystems.bitcoincore.extensions.hexToByteArray
-import io.horizontalsystems.bitcoincore.managers.BlockValidatorHelper
-import io.horizontalsystems.bitcoincore.managers.InsightApi
-import io.horizontalsystems.bitcoincore.managers.UnspentOutputSelector
-import io.horizontalsystems.bitcoincore.managers.UnspentOutputSelectorSingleNoChange
+import io.horizontalsystems.bitcoincore.managers.*
+import io.horizontalsystems.bitcoincore.models.BalanceInfo
 import io.horizontalsystems.bitcoincore.models.BlockInfo
 import io.horizontalsystems.bitcoincore.models.TransactionInfo
 import io.horizontalsystems.bitcoincore.network.Network
 import io.horizontalsystems.bitcoincore.storage.CoreDatabase
 import io.horizontalsystems.bitcoincore.storage.Storage
 import io.horizontalsystems.bitcoincore.transactions.TransactionSizeCalculator
+import io.horizontalsystems.bitcoincore.utils.Base58AddressConverter
 import io.horizontalsystems.bitcoincore.utils.MerkleBranch
 import io.horizontalsystems.bitcoincore.utils.PaymentAddressParser
 import io.horizontalsystems.dashkit.core.DashTransactionInfoConverter
@@ -50,7 +51,7 @@ class DashKit : AbstractKit, IInstantTransactionDelegate, BitcoinCore.Listener {
     interface Listener {
         fun onTransactionsUpdate(inserted: List<DashTransactionInfo>, updated: List<DashTransactionInfo>)
         fun onTransactionsDelete(hashes: List<String>)
-        fun onBalanceUpdate(balance: Long)
+        fun onBalanceUpdate(balance: BalanceInfo)
         fun onLastBlockInfoUpdate(blockInfo: BlockInfo)
         fun onKitStateUpdate(state: BitcoinCore.KitState)
     }
@@ -70,7 +71,7 @@ class DashKit : AbstractKit, IInstantTransactionDelegate, BitcoinCore.Listener {
             walletId: String,
             networkType: NetworkType = NetworkType.MainNet,
             peerSize: Int = 10,
-            syncMode: BitcoinCore.SyncMode = BitcoinCore.SyncMode.Api(),
+            syncMode: SyncMode = SyncMode.Api(),
             confirmationsThreshold: Int = 6
     ) : this(context, Mnemonic().toSeed(words), walletId, networkType, peerSize, syncMode, confirmationsThreshold)
 
@@ -80,11 +81,11 @@ class DashKit : AbstractKit, IInstantTransactionDelegate, BitcoinCore.Listener {
             walletId: String,
             networkType: NetworkType = NetworkType.MainNet,
             peerSize: Int = 10,
-            syncMode: BitcoinCore.SyncMode = BitcoinCore.SyncMode.Api(),
+            syncMode: SyncMode = SyncMode.Api(),
             confirmationsThreshold: Int = 6
     ) {
-        val coreDatabase = CoreDatabase.getInstance(context, getDatabaseNameCore(networkType, walletId))
-        val dashDatabase = DashKitDatabase.getInstance(context, getDatabaseName(networkType, walletId))
+        val coreDatabase = CoreDatabase.getInstance(context, getDatabaseNameCore(networkType, walletId, syncMode))
+        val dashDatabase = DashKitDatabase.getInstance(context, getDatabaseName(networkType, walletId, syncMode))
         val initialSyncUrl: String
 
         val coreStorage = Storage(coreDatabase)
@@ -105,7 +106,23 @@ class DashKit : AbstractKit, IInstantTransactionDelegate, BitcoinCore.Listener {
         val instantTransactionManager = InstantTransactionManager(dashStorage, InstantSendFactory(), InstantTransactionState())
         val initialSyncApi = InsightApi(initialSyncUrl)
 
-        dashTransactionInfoConverter = DashTransactionInfoConverter(BaseTransactionInfoConverter(), instantTransactionManager)
+        dashTransactionInfoConverter = DashTransactionInfoConverter(instantTransactionManager)
+
+        val blockHelper = BlockValidatorHelper(coreStorage)
+
+        val blockValidatorSet = BlockValidatorSet()
+        blockValidatorSet.addBlockValidator(ProofOfWorkValidator())
+
+        val blockValidatorChain = BlockValidatorChain()
+
+        if (network is MainNetDash) {
+            blockValidatorChain.add(DarkGravityWaveValidator(blockHelper, heightInterval, targetTimespan, maxTargetBits, 68589))
+        } else {
+            blockValidatorChain.add(DarkGravityWaveTestnetValidator(targetSpacing, targetTimespan, maxTargetBits, 4002))
+            blockValidatorChain.add(DarkGravityWaveValidator(blockHelper, heightInterval, targetTimespan, maxTargetBits, 4002))
+        }
+
+        blockValidatorSet.addBlockValidator(blockValidatorChain)
 
         bitcoinCore = BitcoinCoreBuilder()
                 .setContext(context)
@@ -119,20 +136,14 @@ class DashKit : AbstractKit, IInstantTransactionDelegate, BitcoinCore.Listener {
                 .setBlockHeaderHasher(X11Hasher())
                 .setInitialSyncApi(initialSyncApi)
                 .setTransactionInfoConverter(dashTransactionInfoConverter)
+                .setBlockValidator(blockValidatorSet)
                 .build()
 
         bitcoinCore.listener = this
 
         //  extending bitcoinCore
 
-        val blockHelper = BlockValidatorHelper(coreStorage)
 
-        if (network is MainNetDash) {
-            bitcoinCore.addBlockValidator(DarkGravityWaveValidator(blockHelper, heightInterval, targetTimespan, maxTargetBits, network.lastCheckpointBlock.height, 68589))
-        } else {
-            bitcoinCore.addBlockValidator(DarkGravityWaveTestnetValidator(targetSpacing, targetTimespan, maxTargetBits, 4002))
-            bitcoinCore.addBlockValidator(DarkGravityWaveValidator(blockHelper, heightInterval, targetTimespan, maxTargetBits, network.lastCheckpointBlock.height, 4002))
-        }
 
         bitcoinCore.addMessageParser(MasternodeListDiffMessageParser())
                 .addMessageParser(TransactionLockMessageParser())
@@ -154,8 +165,8 @@ class DashKit : AbstractKit, IInstantTransactionDelegate, BitcoinCore.Listener {
         bitcoinCore.addPeerSyncListener(masternodeSyncer)
         bitcoinCore.addPeerGroupListener(masternodeSyncer)
 
-        bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP44)
-
+        val base58AddressConverter = Base58AddressConverter(network.addressVersion, network.addressScriptVersion)
+        bitcoinCore.addRestoreKeyConverter(Bip44RestoreKeyConverter(base58AddressConverter))
 
         val singleHasher = SingleSha256Hasher()
         val bls = BLS()
@@ -182,8 +193,8 @@ class DashKit : AbstractKit, IInstantTransactionDelegate, BitcoinCore.Listener {
         bitcoinCore.prependUnspentOutputSelector(UnspentOutputSelectorSingleNoChange(calculator, confirmedUnspentOutputProvider))
     }
 
-    fun transactions(fromHash: String? = null, limit: Int? = null): Single<List<DashTransactionInfo>> {
-        return bitcoinCore.transactions(fromHash, limit).map {
+    fun transactions(fromUid: String? = null, limit: Int? = null): Single<List<DashTransactionInfo>> {
+        return bitcoinCore.transactions(fromUid, limit).map {
             it.mapNotNull { it as? DashTransactionInfo }
         }
     }
@@ -202,7 +213,7 @@ class DashKit : AbstractKit, IInstantTransactionDelegate, BitcoinCore.Listener {
         listener?.onTransactionsDelete(hashes)
     }
 
-    override fun onBalanceUpdate(balance: Long) {
+    override fun onBalanceUpdate(balance: BalanceInfo) {
         listener?.onBalanceUpdate(balance)
     }
 
@@ -231,15 +242,22 @@ class DashKit : AbstractKit, IInstantTransactionDelegate, BitcoinCore.Listener {
         const val targetTimespan = 3600L          // 1 hour for 24 blocks
         const val heightInterval = targetTimespan / targetSpacing
 
-        private fun getDatabaseNameCore(networkType: NetworkType, walletId: String) =
-                "${getDatabaseName(networkType, walletId)}-core"
+        private fun getDatabaseNameCore(networkType: NetworkType, walletId: String, syncMode: SyncMode) =
+                "${getDatabaseName(networkType, walletId, syncMode)}-core"
 
-        private fun getDatabaseName(networkType: NetworkType, walletId: String) =
-                "Dash-${networkType.name}-$walletId"
+        private fun getDatabaseName(networkType: NetworkType, walletId: String, syncMode: SyncMode) =
+                "Dash-${networkType.name}-$walletId-${syncMode.javaClass.simpleName}"
 
         fun clear(context: Context, networkType: NetworkType, walletId: String) {
-            SQLiteDatabase.deleteDatabase(context.getDatabasePath(getDatabaseNameCore(networkType, walletId)))
-            SQLiteDatabase.deleteDatabase(context.getDatabasePath(getDatabaseName(networkType, walletId)))
+            for (syncMode in listOf(SyncMode.Api(), SyncMode.Full(), SyncMode.NewWallet())) {
+                try {
+                    SQLiteDatabase.deleteDatabase(context.getDatabasePath(getDatabaseNameCore(networkType, walletId, syncMode)))
+                    SQLiteDatabase.deleteDatabase(context.getDatabasePath(getDatabaseName(networkType, walletId, syncMode)))
+                } catch (ex: Exception) {
+                    continue
+                }
+            }
         }
     }
+
 }

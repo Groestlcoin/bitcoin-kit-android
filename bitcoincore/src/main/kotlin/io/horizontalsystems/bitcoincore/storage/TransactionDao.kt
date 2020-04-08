@@ -2,6 +2,7 @@ package io.horizontalsystems.bitcoincore.storage
 
 import android.arch.persistence.db.SupportSQLiteQuery
 import android.arch.persistence.room.*
+import io.horizontalsystems.bitcoincore.models.InvalidTransaction
 import io.horizontalsystems.bitcoincore.models.Transaction
 
 @Dao
@@ -18,6 +19,9 @@ interface TransactionDao {
     @Query("select * from `Transaction` where hash = :hash")
     fun getByHash(hash: ByteArray): Transaction?
 
+    @Query("select * from (SELECT * FROM `Transaction` UNION ALL SELECT * FROM InvalidTransaction) where uid = :uid")
+    fun getValidOrInvalidByUid(uid: String): Transaction?
+
     @Query("select * from `Transaction` where blockHash = :blockHash")
     fun getBlockTransactions(blockHash: ByteArray): List<Transaction>
 
@@ -33,8 +37,20 @@ interface TransactionDao {
     @Query("SELECT * FROM `Transaction` t LEFT JOIN Block b ON t.blockHash = b.headerHash WHERE hash = :hash")
     fun getTransactionWithBlock(hash: ByteArray): TransactionWithBlock?
 
+    @Query("SELECT hash FROM `Transaction` WHERE blockHash IS NULL AND isOutgoing = 0 AND isMine = 1")
+    fun getIncomingPendingTxHashes(): List<ByteArray>
+
+    @Query("SELECT COUNT(*) FROM `Transaction` WHERE blockHash IS NULL AND isOutgoing = 0 AND isMine = 1")
+    fun getIncomingPendingTxCount(): Int
+
+    @Query("SELECT * FROM InvalidTransaction WHERE hash = :hash")
+    fun getInvalidTransaction(hash: ByteArray): InvalidTransaction?
+
     @Delete
     fun delete(transaction: Transaction)
+
+    @Query("DELETE FROM `Transaction` WHERE hash=:hash")
+    fun deleteByHash(hash: ByteArray)
 
     @Delete
     fun deleteAll(transactions: List<Transaction>)

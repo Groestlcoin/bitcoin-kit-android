@@ -1,7 +1,6 @@
 package io.horizontalsystems.bitcoincore.core
 
 import com.nhaarman.mockitokotlin2.*
-import io.horizontalsystems.bitcoincore.extensions.toReversedByteArray
 import io.horizontalsystems.bitcoincore.managers.UnspentOutputProvider
 import io.horizontalsystems.bitcoincore.models.Transaction
 import org.spekframework.spek2.Spek
@@ -21,39 +20,39 @@ object DataProviderTest : Spek({
     }
 
     describe("with `fromHash`") {
-        val fromHash = "1234"
+        val fromUid = "1234"
         val limit = 1
 
         it("gets transaction with given hash") {
-            dataProvider.transactions(fromHash).test().assertOf {
-                verify(storage).getTransaction(fromHash.toReversedByteArray())
+            dataProvider.transactions(fromUid).test().assertOf {
+                verify(storage).getValidOrInvalidTransaction(fromUid)
             }
         }
 
-        context("when transactions exist with given hash") {
+        context("when transactions exist with given hash and timestamp") {
             val fromTransaction = mock<Transaction>()
 
             beforeEach {
-                whenever(storage.getTransaction(fromHash.toReversedByteArray())).thenReturn(fromTransaction)
+                whenever(storage.getValidOrInvalidTransaction(fromUid)).thenReturn(fromTransaction)
             }
 
             it("starts loading transactions from that transaction") {
-                dataProvider.transactions(fromHash, limit).test().assertOf {
-                    verify(storage).getTransaction(fromHash.toReversedByteArray())
+                dataProvider.transactions(fromUid, limit).test().assertOf {
+                    verify(storage).getValidOrInvalidTransaction(fromUid)
 
                     verify(storage).getFullTransactionInfo(fromTransaction, limit)
                 }
             }
         }
 
-        context("when transactions does not exist with given hash") {
+        context("when transactions does not exist with given hash and timestamp") {
             beforeEach {
-                whenever(storage.getTransaction(fromHash.toReversedByteArray())).thenReturn(null)
+                whenever(storage.getValidOrInvalidTransaction(fromUid)).thenReturn(null)
             }
 
-            it("do not fetch transactions with `fromHash`") {
-                dataProvider.transactions(fromHash, limit).test().assertOf {
-                    verify(storage).getTransaction(fromHash.toReversedByteArray())
+            it("do not fetch transactions with `fromHash` and `fromTimestamp`") {
+                dataProvider.transactions(fromUid, limit).test().assertOf {
+                    verify(storage).getValidOrInvalidTransaction(fromUid)
                     verify(storage, never()).getFullTransactionInfo(null, limit)
                 }
             }

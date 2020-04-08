@@ -17,6 +17,9 @@ interface TransactionOutputDao {
     @Delete
     fun deleteAll(outputs: List<TransactionOutput>)
 
+    @Query("DELETE FROM TransactionOutput WHERE transactionHash = :txHash")
+    fun deleteByTxHash(txHash: ByteArray)
+
     @Query("""
         SELECT TransactionOutput.*, PublicKey.*, `Transaction`.*, Block.*
         FROM TransactionOutput
@@ -31,7 +34,7 @@ interface TransactionOutputDao {
     @Query("select * from TransactionOutput where transactionHash = :previousOutputTxHash and `index` = :previousOutputIndex limit 1")
     fun getPreviousOutput(previousOutputTxHash: ByteArray, previousOutputIndex: Int): TransactionOutput?
 
-    @Query("select * from TransactionOutput where transactionHash = :hash")
+    @Query("select * from TransactionOutput where transactionHash = :hash order by rowId")
     fun getByHash(hash: ByteArray): List<TransactionOutput>
 
     @Query("select * from TransactionOutput where publicKeyPath = :path")

@@ -4,11 +4,12 @@ import android.arch.persistence.db.SupportSQLiteDatabase
 import android.arch.persistence.room.Database
 import android.arch.persistence.room.Room
 import android.arch.persistence.room.RoomDatabase
+import android.arch.persistence.room.TypeConverters
 import android.arch.persistence.room.migration.Migration
 import android.content.Context
 import io.horizontalsystems.bitcoincore.models.*
 
-@Database(version = 6, exportSchema = false, entities = [
+@Database(version = 9, exportSchema = false, entities = [
     BlockchainState::class,
     PeerAddress::class,
     BlockHash::class,
@@ -17,9 +18,10 @@ import io.horizontalsystems.bitcoincore.models.*
     Transaction::class,
     TransactionInput::class,
     TransactionOutput::class,
-    PublicKey::class
+    PublicKey::class,
+    InvalidTransaction::class
 ])
-
+@TypeConverters(ScriptTypeConverter::class)
 abstract class CoreDatabase : RoomDatabase() {
 
     abstract val blockchainState: BlockchainStateDao
@@ -31,24 +33,50 @@ abstract class CoreDatabase : RoomDatabase() {
     abstract val input: TransactionInputDao
     abstract val output: TransactionOutputDao
     abstract val publicKey: PublicKeyDao
+    abstract val invalidTransaction: InvalidTransactionDao
 
     companion object {
 
         fun getInstance(context: Context, dbName: String): CoreDatabase {
             return Room.databaseBuilder(context, CoreDatabase::class.java, dbName)
-                    .fallbackToDestructiveMigration()
                     .allowMainThreadQueries()
                     .addMigrations(
-                            add_connectionTime_to_PeerAddress,
+                            add_conflictingTxHash_to_Transaction,
+                            add_table_InvalidTransaction,
+                            update_transaction_output,
+                            update_block_timestamp,
                             add_hasTransaction_to_Block,
-                            update_block_timestamp
+                            add_connectionTime_to_PeerAddress
                     )
+                    .fallbackToDestructiveMigration()
                     .build()
         }
 
-        private val add_connectionTime_to_PeerAddress = object : Migration(1, 2) {
+        private val add_conflictingTxHash_to_Transaction = object : Migration(8, 9) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("ALTER TABLE PeerAddress ADD COLUMN connectionTime INTEGER")
+                database.execSQL("ALTER TABLE `Transaction` ADD COLUMN `conflictingTxHash` BLOB")
+                database.execSQL("ALTER TABLE `InvalidTransaction` ADD COLUMN `conflictingTxHash` BLOB")
+            }
+        }
+
+        private val add_table_InvalidTransaction = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS `InvalidTransaction` (`hash` BLOB NOT NULL, `blockHash` BLOB, `version` INTEGER NOT NULL, `lockTime` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, `order` INTEGER NOT NULL, `isMine` INTEGER NOT NULL, `isOutgoing` INTEGER NOT NULL, `segwit` INTEGER NOT NULL, `status` INTEGER NOT NULL, `serializedTxInfo` TEXT NOT NULL, PRIMARY KEY(`hash`))")
+                database.execSQL("ALTER TABLE SentTransaction ADD COLUMN sendSuccess INTEGER DEFAULT 0 NOT NULL")
+                database.execSQL("ALTER TABLE `Transaction` ADD COLUMN serializedTxInfo TEXT DEFAULT '' NOT NULL")
+            }
+        }
+
+        private val update_transaction_output = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE TransactionOutput ADD COLUMN `pluginId` INTEGER")
+                database.execSQL("ALTER TABLE TransactionOutput ADD COLUMN `pluginData` TEXT")
+            }
+        }
+
+        private val update_block_timestamp = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("UPDATE Block SET block_timestamp = 1559256184 WHERE height = 578592 AND block_timestamp = 1559277784")
             }
         }
 
@@ -59,9 +87,9 @@ abstract class CoreDatabase : RoomDatabase() {
             }
         }
 
-        private val update_block_timestamp = object : Migration(3, 4) {
+        private val add_connectionTime_to_PeerAddress = object : Migration(1, 2) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("UPDATE Block SET block_timestamp = 1559256184 WHERE height = 578592 AND block_timestamp = 1559277784")
+                database.execSQL("ALTER TABLE PeerAddress ADD COLUMN connectionTime INTEGER")
             }
         }
     }

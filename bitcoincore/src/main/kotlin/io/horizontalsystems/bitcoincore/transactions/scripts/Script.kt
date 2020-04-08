@@ -4,14 +4,24 @@ import io.horizontalsystems.bitcoincore.extensions.toHexString
 import io.horizontalsystems.bitcoincore.utils.Utils
 import java.io.ByteArrayInputStream
 
-object ScriptType {
-    const val P2PKH = 1     // pay to pubkey hash (aka pay to address)
-    const val P2PK = 2      // pay to pubkey
-    const val P2SH = 3      // pay to script hash
-    const val P2WPKH = 4    // pay to witness pubkey hash
-    const val P2WSH = 5     // pay to witness script hash
-    const val P2WPKHSH = 6  // P2WPKH nested in P2SH
-    const val UNKNOWN = 0
+enum class ScriptType(val value: Int) {
+    P2PKH(1),     // pay to pubkey hash (aka pay to address)
+    P2PK(2),      // pay to pubkey
+    P2SH(3),      // pay to script hash
+    P2WPKH(4),    // pay to witness pubkey hash
+    P2WSH(5),     // pay to witness script hash
+    P2WPKHSH(6),  // P2WPKH nested in P2SH
+    NULL_DATA(7),
+    UNKNOWN(0);
+
+    companion object {
+        fun fromValue(value: Int): ScriptType? {
+            return values().find { it.value == value }
+        }
+    }
+
+    val isWitness: Boolean
+        get() = this in arrayOf(P2WPKH, P2WSH, P2WPKHSH)
 }
 
 class Script(bytes: ByteArray) {

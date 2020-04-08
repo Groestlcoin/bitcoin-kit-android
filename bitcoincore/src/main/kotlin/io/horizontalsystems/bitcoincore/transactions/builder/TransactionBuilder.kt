@@ -1,121 +1,43 @@
 package io.horizontalsystems.bitcoincore.transactions.builder
 
-import io.horizontalsystems.bitcoincore.models.Address
-import io.horizontalsystems.bitcoincore.models.Transaction
-import io.horizontalsystems.bitcoincore.models.TransactionInput
-import io.horizontalsystems.bitcoincore.models.TransactionOutput
+import io.horizontalsystems.bitcoincore.core.IPluginData
+import io.horizontalsystems.bitcoincore.core.IRecipientSetter
+import io.horizontalsystems.bitcoincore.models.TransactionDataSortType
 import io.horizontalsystems.bitcoincore.storage.FullTransaction
-import io.horizontalsystems.bitcoincore.storage.InputToSign
 import io.horizontalsystems.bitcoincore.storage.UnspentOutput
-import io.horizontalsystems.bitcoincore.transactions.scripts.OpCodes
-import io.horizontalsystems.bitcoincore.transactions.scripts.ScriptBuilder
-import io.horizontalsystems.bitcoincore.transactions.scripts.ScriptType
 
-open class TransactionBuilder(private val scriptBuilder: ScriptBuilder, private var inputSigner: InputSigner) {
+class TransactionBuilder(
+        private val recipientSetter: IRecipientSetter,
+        private val outputSetter: OutputSetter,
+        private val inputSetter: InputSetter,
+        private val signer: TransactionSigner,
+        private val lockTimeSetter: LockTimeSetter
+) {
 
-    open fun buildTransaction(value: Long, unspentOutputs: List<UnspentOutput>, fee: Long, senderPay: Boolean, address: Address, changeAddress: Address?, lastBlockHeight: Long): FullTransaction {
+    fun buildTransaction(toAddress: String, value: Long, feeRate: Int, senderPay: Boolean, sortType: TransactionDataSortType, pluginData: Map<Byte, IPluginData>): FullTransaction {
+        val mutableTransaction = MutableTransaction()
 
-        if (fee > value && !senderPay) {
-            throw BuilderException.FeeMoreThanValue()
-        }
+        recipientSetter.setRecipient(mutableTransaction, toAddress, value, pluginData, false)
+        inputSetter.setInputs(mutableTransaction, feeRate, senderPay, sortType)
+        lockTimeSetter.setLockTime(mutableTransaction)
 
-        val transaction = Transaction(version = 1, lockTime = lastBlockHeight)
-        val inputsToSign = mutableListOf<InputToSign>()
-        val outputs = mutableListOf<TransactionOutput>()
+        outputSetter.setOutputs(mutableTransaction, sortType)
+        signer.sign(mutableTransaction)
 
-        //  add inputs
-        for (unspentOutput in unspentOutputs) {
-            val previousOutput = unspentOutput.output
-            val transactionInput = TransactionInput(previousOutput.transactionHash, previousOutput.index.toLong())
-
-            if (unspentOutput.output.scriptType == ScriptType.P2WPKH) {
-                unspentOutput.output.keyHash = unspentOutput.output.keyHash?.drop(2)?.toByteArray()
-            }
-
-            inputsToSign.add(InputToSign(transactionInput, previousOutput, unspentOutput.publicKey))
-        }
-
-        //  calculate fee and add change output if needed
-        val receivedValue = if (senderPay) value else value - fee
-        val sentValue = if (senderPay) value + fee else value
-
-        //  add output
-        outputs.add(TransactionOutput(receivedValue, 0, scriptBuilder.lockingScript(address), address.scriptType, address.string, address.hash))
-
-        if (changeAddress != null) {
-            val totalValue = unspentOutputs.fold(0L) { sum, unspent -> sum + unspent.output.value }
-            outputs.add(TransactionOutput(totalValue - sentValue, 1, scriptBuilder.lockingScript(changeAddress), changeAddress.scriptType, changeAddress.string, changeAddress.hash))
-        }
-
-        // sign inputs
-        inputsToSign.forEachIndexed { index, inputToSign ->
-            val unspentOutput = unspentOutputs[index]
-            val sigScriptData = inputSigner.sigScriptData(transaction, inputsToSign, outputs, index)
-
-            when (unspentOutput.output.scriptType) {
-                ScriptType.P2PKH -> {
-                    inputToSign.input.sigScript = scriptBuilder.unlockingScript(sigScriptData)
-                }
-
-                ScriptType.P2WPKH -> {
-                    transaction.segwit = true
-                    inputToSign.input.witness = sigScriptData
-                }
-
-                ScriptType.P2WPKHSH -> {
-                    transaction.segwit = true
-                    val witnessProgram = OpCodes.scriptWPKH(unspentOutput.publicKey.publicKeyHash)
-
-                    inputToSign.input.sigScript = scriptBuilder.unlockingScript(listOf(witnessProgram))
-                    inputToSign.input.witness = sigScriptData
-                }
-
-                else -> throw BuilderException.NotSupportedScriptType()
-            }
-        }
-
-        transaction.status = Transaction.Status.NEW
-        transaction.isMine = true
-        transaction.isOutgoing = true
-
-        return FullTransaction(transaction, inputsToSign.map { it.input }, outputs)
+        return mutableTransaction.build()
     }
 
-    open fun buildTransaction(unspentOutput: UnspentOutput, address: Address, fee: Long, lastBlockHeight: Long, signatureScriptFunction: (ByteArray, ByteArray) -> ByteArray): FullTransaction {
+    fun buildTransaction(unspentOutput: UnspentOutput, toAddress: String, feeRate: Int, sortType: TransactionDataSortType): FullTransaction {
+        val mutableTransaction = MutableTransaction(false)
 
-        if (unspentOutput.output.scriptType != ScriptType.P2SH) {
-            throw BuilderException.NotSupportedScriptType()
-        }
+        recipientSetter.setRecipient(mutableTransaction, toAddress, unspentOutput.output.value, mapOf(), false)
+        inputSetter.setInputs(mutableTransaction, unspentOutput, feeRate)
+        lockTimeSetter.setLockTime(mutableTransaction)
 
-        if (unspentOutput.output.value < fee) {
-            throw BuilderException.FeeMoreThanValue()
-        }
+        outputSetter.setOutputs(mutableTransaction, sortType)
+        signer.sign(mutableTransaction)
 
-        //  add input without unlocking scripts
-        val transactionInput = TransactionInput(unspentOutput.output.transactionHash, unspentOutput.output.index.toLong())
-        if (unspentOutput.output.scriptType == ScriptType.P2WPKH) {
-            unspentOutput.output.keyHash = unspentOutput.output.keyHash?.drop(2)?.toByteArray()
-        }
-        val inputToSign = InputToSign(transactionInput, unspentOutput.output, unspentOutput.publicKey)
-
-        //  calculate receiveValue
-        val receivedValue = unspentOutput.output.value - fee
-
-        //  add output
-        val output = TransactionOutput(receivedValue, 0, scriptBuilder.lockingScript(address), address.scriptType, address.string, address.hash)
-
-        //  build transaction
-        val transaction = Transaction(version = 1, lockTime = lastBlockHeight)
-
-        //  sign input
-        val sigScriptData = inputSigner.sigScriptData(transaction, listOf(inputToSign), listOf(output), 0)
-        inputToSign.input.sigScript = signatureScriptFunction.invoke(sigScriptData[0], sigScriptData[1])
-
-        transaction.status = Transaction.Status.NEW
-        transaction.isMine = true
-        transaction.isOutgoing = false
-
-        return FullTransaction(transaction, listOf(inputToSign.input), listOf(output))
+        return mutableTransaction.build()
     }
 
     open class BuilderException : Exception() {

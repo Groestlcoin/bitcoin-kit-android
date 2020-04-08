@@ -4,20 +4,21 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import io.horizontalsystems.bitcoincore.AbstractKit
 import io.horizontalsystems.bitcoincore.BitcoinCore
+import io.horizontalsystems.bitcoincore.BitcoinCore.SyncMode
 import io.horizontalsystems.bitcoincore.BitcoinCoreBuilder
-import io.horizontalsystems.bitcoincore.blocks.validators.BitsValidator
-import io.horizontalsystems.bitcoincore.blocks.validators.LegacyDifficultyAdjustmentValidator
-import io.horizontalsystems.bitcoincore.blocks.validators.LegacyTestNetDifficultyValidator
+import io.horizontalsystems.bitcoincore.blocks.BlockMedianTimeHelper
+import io.horizontalsystems.bitcoincore.blocks.validators.*
 import io.horizontalsystems.bitcoincore.core.Bip
-import io.horizontalsystems.bitcoincore.managers.BCoinApi
-import io.horizontalsystems.bitcoincore.managers.BlockValidatorHelper
+import io.horizontalsystems.bitcoincore.managers.*
 import io.horizontalsystems.bitcoincore.models.TransactionInfo
 import io.horizontalsystems.bitcoincore.network.Network
 import io.horizontalsystems.bitcoincore.storage.CoreDatabase
 import io.horizontalsystems.bitcoincore.storage.Storage
+import io.horizontalsystems.bitcoincore.utils.Base58AddressConverter
 import io.horizontalsystems.bitcoincore.utils.PaymentAddressParser
 import io.horizontalsystems.bitcoincore.utils.SegwitAddressConverter
 import io.horizontalsystems.hdwalletkit.Mnemonic
+import io.horizontalsystems.hodler.HodlerPlugin
 import io.reactivex.Single
 
 class BitcoinKit : AbstractKit {
@@ -44,7 +45,7 @@ class BitcoinKit : AbstractKit {
             walletId: String,
             networkType: NetworkType = NetworkType.MainNet,
             peerSize: Int = 10,
-            syncMode: BitcoinCore.SyncMode = BitcoinCore.SyncMode.Api(),
+            syncMode: SyncMode = SyncMode.Api(),
             confirmationsThreshold: Int = 6,
             bip: Bip = Bip.BIP44
     ) : this(context, Mnemonic().toSeed(words), walletId, networkType, peerSize, syncMode, confirmationsThreshold, bip)
@@ -55,11 +56,11 @@ class BitcoinKit : AbstractKit {
             walletId: String,
             networkType: NetworkType = NetworkType.MainNet,
             peerSize: Int = 10,
-            syncMode: BitcoinCore.SyncMode = BitcoinCore.SyncMode.Api(),
+            syncMode: SyncMode = SyncMode.Api(),
             confirmationsThreshold: Int = 6,
             bip: Bip = Bip.BIP44
     ) {
-        val database = CoreDatabase.getInstance(context, getDatabaseName(networkType, walletId))
+        val database = CoreDatabase.getInstance(context, getDatabaseName(networkType, walletId, syncMode, bip))
         val storage = Storage(database)
         var initialSyncUrl = ""
 
@@ -78,7 +79,27 @@ class BitcoinKit : AbstractKit {
         val paymentAddressParser = PaymentAddressParser("bitcoin", removeScheme = true)
         val initialSyncApi = BCoinApi(initialSyncUrl)
 
-        bitcoinCore = BitcoinCoreBuilder()
+        val blockHelper = BlockValidatorHelper(storage)
+
+        val blockValidatorSet = BlockValidatorSet()
+        blockValidatorSet.addBlockValidator(ProofOfWorkValidator())
+
+        val blockValidatorChain = BlockValidatorChain()
+
+        if (networkType == NetworkType.MainNet) {
+            blockValidatorChain.add(LegacyDifficultyAdjustmentValidator(blockHelper, heightInterval, targetTimespan, maxTargetBits))
+            blockValidatorChain.add(BitsValidator())
+        } else if (networkType == NetworkType.TestNet) {
+            blockValidatorChain.add(LegacyDifficultyAdjustmentValidator(blockHelper, heightInterval, targetTimespan, maxTargetBits))
+            blockValidatorChain.add(LegacyTestNetDifficultyValidator(storage, heightInterval, targetSpacing, maxTargetBits))
+            blockValidatorChain.add(BitsValidator())
+        }
+
+        blockValidatorSet.addBlockValidator(blockValidatorChain)
+
+        val coreBuilder = BitcoinCoreBuilder()
+
+        bitcoinCore = coreBuilder
                 .setContext(context)
                 .setSeed(seed)
                 .setNetwork(network)
@@ -89,49 +110,53 @@ class BitcoinKit : AbstractKit {
                 .setConfirmationThreshold(confirmationsThreshold)
                 .setStorage(storage)
                 .setInitialSyncApi(initialSyncApi)
+                .setBlockValidator(blockValidatorSet)
+                .addPlugin(HodlerPlugin(coreBuilder.addressConverter, storage, BlockMedianTimeHelper(storage)))
                 .build()
 
         //  extending bitcoinCore
 
-        val bech32 = SegwitAddressConverter(network.addressSegwitHrp)
-        bitcoinCore.prependAddressConverter(bech32)
+        val bech32AddressConverter = SegwitAddressConverter(network.addressSegwitHrp)
+        val base58AddressConverter = Base58AddressConverter(network.addressVersion, network.addressScriptVersion)
 
-        val blockHelper = BlockValidatorHelper(storage)
-
-        if (networkType == NetworkType.MainNet) {
-            bitcoinCore.addBlockValidator(LegacyDifficultyAdjustmentValidator(blockHelper, BitcoinCore.heightInterval, BitcoinCore.targetTimespan, BitcoinCore.maxTargetBits))
-            bitcoinCore.addBlockValidator(BitsValidator())
-        } else if (networkType == NetworkType.TestNet) {
-            bitcoinCore.addBlockValidator(LegacyDifficultyAdjustmentValidator(blockHelper, BitcoinCore.heightInterval, BitcoinCore.targetTimespan, BitcoinCore.maxTargetBits))
-            bitcoinCore.addBlockValidator(LegacyTestNetDifficultyValidator(storage, BitcoinCore.heightInterval, BitcoinCore.targetSpacing, BitcoinCore.maxTargetBits))
-            bitcoinCore.addBlockValidator(BitsValidator())
-        }
+        bitcoinCore.prependAddressConverter(bech32AddressConverter)
 
         when (bip) {
             Bip.BIP44 -> {
-                bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP44)
-                bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP49)
-                bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP84)
+                bitcoinCore.addRestoreKeyConverter(Bip44RestoreKeyConverter(base58AddressConverter))
+                bitcoinCore.addRestoreKeyConverter(Bip49RestoreKeyConverter(base58AddressConverter))
+                bitcoinCore.addRestoreKeyConverter(Bip84RestoreKeyConverter(bech32AddressConverter))
             }
             Bip.BIP49 -> {
-                bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP49)
+                bitcoinCore.addRestoreKeyConverter(Bip49RestoreKeyConverter(base58AddressConverter))
             }
             Bip.BIP84 -> {
-                bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP84)
+                bitcoinCore.addRestoreKeyConverter(Bip84RestoreKeyConverter(bech32AddressConverter))
             }
         }
     }
 
-    fun transactions(fromHash: String? = null, limit: Int? = null): Single<List<TransactionInfo>> {
-        return bitcoinCore.transactions(fromHash, limit)
+    fun transactions(fromUid: String? = null, limit: Int? = null): Single<List<TransactionInfo>> {
+        return bitcoinCore.transactions(fromUid, limit)
     }
 
     companion object {
+        const val maxTargetBits: Long = 0x1d00ffff                // Maximum difficulty
+        const val targetSpacing = 10 * 60                         // 10 minutes per block.
+        const val targetTimespan: Long = 14 * 24 * 60 * 60        // 2 weeks per difficulty cycle, on average.
+        const val heightInterval = targetTimespan / targetSpacing // 2016 blocks
 
-        private fun getDatabaseName(networkType: NetworkType, walletId: String): String = "Bitcoin-${networkType.name}-$walletId"
+        private fun getDatabaseName(networkType: NetworkType, walletId: String, syncMode: SyncMode, bip: Bip): String = "Bitcoin-${networkType.name}-$walletId-${syncMode.javaClass.simpleName}-${bip.name}"
 
         fun clear(context: Context, networkType: NetworkType, walletId: String) {
-            SQLiteDatabase.deleteDatabase(context.getDatabasePath(getDatabaseName(networkType, walletId)))
+            for (syncMode in listOf(SyncMode.Api(), SyncMode.Full(), SyncMode.NewWallet())) {
+                for (bip in Bip.values())
+                    try {
+                        SQLiteDatabase.deleteDatabase(context.getDatabasePath(getDatabaseName(networkType, walletId, syncMode, bip)))
+                    } catch (ex: Exception) {
+                        continue
+                    }
+            }
         }
     }
 

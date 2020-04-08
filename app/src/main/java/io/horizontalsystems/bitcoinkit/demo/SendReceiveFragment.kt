@@ -1,148 +1,125 @@
 package io.horizontalsystems.bitcoinkit.demo
 
+import android.arch.lifecycle.Observer
 import android.arch.lifecycle.ViewModelProviders
 import android.os.Bundle
 import android.support.v4.app.Fragment
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
-import io.horizontalsystems.bitcoincore.managers.UnspentOutputSelectorError
-import io.horizontalsystems.bitcoincore.models.FeePriority
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Toast
+import io.horizontalsystems.hodler.LockTimeInterval
+import kotlinx.android.synthetic.main.fragment_send_receive.*
 
 class SendReceiveFragment : Fragment() {
-
     private lateinit var viewModel: MainViewModel
-    private lateinit var receiveAddressButton: Button
-    private lateinit var receiveAddressText: TextView
-
-    private lateinit var sendButton: Button
-    private lateinit var maxButton: Button
-    private lateinit var sendAmount: EditText
-    private lateinit var sendAddress: EditText
-    private lateinit var txFeeValue: TextView
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        activity?.let {
-            viewModel = ViewModelProviders.of(it).get(MainViewModel::class.java)
-        }
-    }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.fragment_send_receive, null)
     }
 
+    override fun onActivityCreated(savedInstanceState: Bundle?) {
+        super.onActivityCreated(savedInstanceState)
+
+        activity?.let { activity ->
+            viewModel = ViewModelProviders.of(activity).get(MainViewModel::class.java)
+
+            viewModel.receiveAddressLiveData.observe(this, Observer {
+                receiveAddressText.text = it
+            })
+
+            viewModel.amountLiveData.observe(this, Observer {
+                sendAmount.setText(it?.toString())
+            })
+
+            viewModel.addressLiveData.observe(this, Observer {
+                sendAddress.setText(it)
+            })
+
+            viewModel.feeLiveData.observe(this, Observer {
+                txFeeValue.text = it?.toString()
+            })
+
+            viewModel.errorLiveData.observe(this, Observer {
+                val toast = Toast.makeText(context, it, Toast.LENGTH_LONG)
+
+                toast.setGravity(Gravity.CENTER, 0, 0)
+                toast.show()
+            })
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        receiveAddressText = view.findViewById(R.id.receiveAddressText)
-        receiveAddressButton = view.findViewById(R.id.receiveAddressButton)
         receiveAddressButton.setOnClickListener {
-            receiveAddressText.text = viewModel.receiveAddress()
+            viewModel.onReceiveClick()
         }
 
-        txFeeValue = view.findViewById(R.id.txFeeValue)
-        sendAddress = view.findViewById(R.id.sendAddress)
-        sendAmount = view.findViewById(R.id.sendAmount)
-        sendButton = view.findViewById(R.id.sendButton)
-        maxButton = view.findViewById(R.id.maxButton)
         sendButton.setOnClickListener {
-            if (sendAddress.text.isEmpty()) {
-                sendAddress.error = "Send address cannot be blank"
-            } else if (sendAmount.text.isEmpty()) {
-                sendAmount.error = "Send amount cannot be blank"
-            } else {
-                send()
-            }
+            viewModel.onSendClick()
         }
+
         maxButton.setOnClickListener {
-            viewModel.balance.value?.let { balance ->
-                val fee = try {
-                    viewModel.fee(balance)
-                } catch (e: UnspentOutputSelectorError.InsufficientUnspentOutputs) {
-                    e.fee
-                } catch (e: Exception) {
-                    0L
-                }
-
-                sendAmount.setText("${balance - fee}")
-            }
+            viewModel.onMaxClick()
         }
 
-        sendAmount.addTextChangedListener(textChangeListener)
-
-        val customFeePriority = view.findViewById<EditText>(R.id.customFeePriority)
-        customFeePriority.addTextChangedListener(object: TextWatcher {
-            override fun afterTextChanged(s: Editable) {
-                val feePriority = s.toString().toIntOrNull()
-                feePriority?.let {
-                    viewModel.feePriority = FeePriority.Custom(it)
-                    updateFee()
-                }
+        sendAmount.addTextChangedListener(SimpleTextWatcher { s ->
+            viewModel.amount = try {
+                sendAmount.text?.toString()?.toLong()
+            } catch (e: NumberFormatException) {
+                null
             }
-
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
         })
 
-        val radioGroup = view.findViewById<RadioGroup>(R.id.radioGroup)
+        sendAddress.addTextChangedListener(SimpleTextWatcher { s ->
+            viewModel.address = sendAddress.text.toString()
+        })
+
         radioGroup.setOnCheckedChangeListener { _, checkedId ->
             val feePriority = when (checkedId) {
-                R.id.radioLowest ->  FeePriority.Lowest
-                R.id.radioLow ->  FeePriority.Low
-                R.id.radioMedium ->  FeePriority.Medium
-                R.id.radioHigh ->  FeePriority.High
-                else ->  FeePriority.Highest
+                R.id.radioLow -> FeePriority.Low
+                R.id.radioMedium -> FeePriority.Medium
+                R.id.radioHigh -> FeePriority.High
+                else -> throw Exception("Undefined priority")
             }
-            customFeePriority.setText("")
             viewModel.feePriority = feePriority
-            updateFee()
         }
-    }
 
-    private fun send() {
-        var message: String
-        try {
-            viewModel.send(sendAddress.text.toString(), sendAmount.text.toString().toLong())
-            sendAmount.text = null
-            txFeeValue.text = null
-            sendAddress.text = null
-            message = "Transaction sent"
-        } catch (e: Exception) {
-            message = when (e) {
-                is UnspentOutputSelectorError.InsufficientUnspentOutputs,
-                is UnspentOutputSelectorError.EmptyUnspentOutputs -> "Insufficient balance"
-                else -> e.message ?: "Failed to send transaction (${e.javaClass.name})"
+
+        lockTimePeriodValue.adapter = ArrayAdapter(view.context, android.R.layout.simple_spinner_dropdown_item, LockTimeIntervalOption.getIntervals())
+        lockTimePeriodValue.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                viewModel.timeLockInterval = (parent?.getItemAtPosition(position) as LockTimeIntervalOption).interval
             }
         }
+    }
+}
 
-        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+class LockTimeIntervalOption(val interval: LockTimeInterval? = null) {
+    override fun toString(): String {
+        return interval?.name ?: "OFF"
     }
 
-    private val textChangeListener = object : TextWatcher {
-        override fun afterTextChanged(s: Editable?) {
-            updateFee()
-        }
-
-        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-    }
-
-    private fun updateFee() {
-        if (sendAddress.text.isEmpty() || sendAmount.text.isEmpty()) {
-            return
-        }
-        try {
-            txFeeValue.text = viewModel.fee(
-                    value = sendAmount.text.toString().toLong(),
-                    address = sendAddress.text.toString()
-            ).toString()
-        } catch (e: Exception) {
-            Toast.makeText(context, e.message, Toast.LENGTH_LONG).show()
+    companion object {
+        fun getIntervals(): Array<LockTimeIntervalOption> {
+            return arrayOf(LockTimeIntervalOption()) + LockTimeInterval.values().map { LockTimeIntervalOption(it) }
         }
     }
+}
+
+class SimpleTextWatcher(private val callback: (s: Editable?) -> Unit) : TextWatcher {
+    override fun afterTextChanged(s: Editable?) {
+        callback.invoke(s)
+    }
+
+    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
 }

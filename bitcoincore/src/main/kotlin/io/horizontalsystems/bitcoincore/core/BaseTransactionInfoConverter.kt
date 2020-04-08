@@ -1,70 +1,88 @@
 package io.horizontalsystems.bitcoincore.core
 
 import io.horizontalsystems.bitcoincore.extensions.toReversedHex
-import io.horizontalsystems.bitcoincore.models.TransactionAddress
-import io.horizontalsystems.bitcoincore.models.TransactionInfo
+import io.horizontalsystems.bitcoincore.models.*
 import io.horizontalsystems.bitcoincore.storage.FullTransactionInfo
 
-class BaseTransactionInfoConverter {
+class BaseTransactionInfoConverter(private val pluginManager: PluginManager) {
 
     fun transactionInfo(fullTransaction: FullTransactionInfo): TransactionInfo {
         val transaction = fullTransaction.header
 
-        var totalMineInput = 0L
-        var totalMineOutput = 0L
-        val fromAddresses = mutableListOf<TransactionAddress>()
-        val toAddresses = mutableListOf<TransactionAddress>()
+        if (transaction.status == Transaction.Status.INVALID) {
+            (transaction as? InvalidTransaction)?.let {
+                return getInvalidTransactionInfo(it)
+            }
+        }
 
-        var hasOnlyMyInputs = true
+        val inputsInfo = mutableListOf<TransactionInputInfo>()
+        val outputsInfo = mutableListOf<TransactionOutputInfo>()
+        var inputsTotalValue = 0L
+        var outputsTotalValue = 0L
+        var allInputsHaveValue = true
 
         fullTransaction.inputs.forEach { input ->
             var mine = false
+            var value: Long? = null
 
-            if (input.previousOutput?.publicKeyPath != null) {
-                totalMineInput += input.previousOutput.value
-                mine = true
+            if (input.previousOutput != null) {
+                value = input.previousOutput.value
+                if (input.previousOutput.publicKeyPath != null) {
+                    mine = true
+                }
             } else {
-                hasOnlyMyInputs = false
+                allInputsHaveValue = false
             }
 
-            input.input.address?.let { address ->
-                fromAddresses.add(TransactionAddress(address, mine = mine))
-            }
+            inputsTotalValue += value ?: 0
+
+            inputsInfo.add(TransactionInputInfo(mine, value, input.input.address))
         }
 
         fullTransaction.outputs.forEach { output ->
-            var mine = false
+            outputsTotalValue += output.value
 
-            if (output.publicKeyPath != null) {
-                totalMineOutput += output.value
-                mine = true
-            }
+            val outputInfo = TransactionOutputInfo(mine = output.publicKeyPath != null,
+                    changeOutput = output.changeOutput,
+                    value = output.value,
+                    address = output.address,
+                    pluginId = output.pluginId,
+                    pluginDataString = output.pluginData,
+                    pluginData = pluginManager.parsePluginData(output, transaction.timestamp))
 
-            output.address?.let { address ->
-                toAddresses.add(TransactionAddress(address, mine))
-            }
+            outputsInfo.add(outputInfo)
         }
 
-        var fee: Long? = null
-        var amount = totalMineOutput - totalMineInput
-
-        if (hasOnlyMyInputs) {
-            val outputsSum = fullTransaction.outputs.sumByDouble { it.value.toDouble() }.toLong()
-
-            fee = totalMineInput - outputsSum
-            amount += fee
-        }
+        val fee = if (allInputsHaveValue) inputsTotalValue - outputsTotalValue else null
 
         return TransactionInfo(
+                uid = transaction.uid,
                 transactionHash = transaction.hash.toReversedHex(),
                 transactionIndex = transaction.order,
-                from = fromAddresses,
-                to = toAddresses,
-                amount = amount,
+                inputs = inputsInfo,
+                outputs = outputsInfo,
                 fee = fee,
                 blockHeight = fullTransaction.block?.height,
-                timestamp = transaction.timestamp
-        )
+                timestamp = transaction.timestamp,
+                status = TransactionStatus.getByCode(transaction.status) ?: TransactionStatus.NEW,
+                conflictingTxHash = transaction.conflictingTxHash?.toReversedHex())
+    }
+
+    private fun getInvalidTransactionInfo(transaction: InvalidTransaction): TransactionInfo {
+        return try {
+            TransactionInfo(transaction.serializedTxInfo)
+        } catch (ex: Exception) {
+            TransactionInfo(
+                    uid = transaction.uid,
+                    transactionHash = transaction.hash.toReversedHex(),
+                    transactionIndex = transaction.order,
+                    timestamp = transaction.timestamp,
+                    status = TransactionStatus.INVALID,
+                    inputs = listOf(),
+                    outputs = listOf(),
+                    fee = null,
+                    blockHeight = null)
+        }
     }
 
 }

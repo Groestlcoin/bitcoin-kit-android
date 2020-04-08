@@ -2,12 +2,19 @@ package io.horizontalsystems.bitcoinkit.demo
 
 import android.arch.lifecycle.MutableLiveData
 import android.arch.lifecycle.ViewModel
+import io.horizontalsystems.bitcoincore.BitcoinCore
 import io.horizontalsystems.bitcoincore.BitcoinCore.KitState
 import io.horizontalsystems.bitcoincore.core.Bip
+import io.horizontalsystems.bitcoincore.core.IPluginData
+import io.horizontalsystems.bitcoincore.managers.SendValueErrors
+import io.horizontalsystems.bitcoincore.models.BalanceInfo
 import io.horizontalsystems.bitcoincore.models.BlockInfo
-import io.horizontalsystems.bitcoincore.models.FeePriority
+import io.horizontalsystems.bitcoincore.models.TransactionDataSortType
 import io.horizontalsystems.bitcoincore.models.TransactionInfo
 import io.horizontalsystems.bitcoinkit.BitcoinKit
+import io.horizontalsystems.hodler.HodlerData
+import io.horizontalsystems.hodler.HodlerPlugin
+import io.horizontalsystems.hodler.LockTimeInterval
 import io.reactivex.disposables.CompositeDisposable
 
 class MainViewModel : ViewModel(), BitcoinKit.Listener {
@@ -17,12 +24,11 @@ class MainViewModel : ViewModel(), BitcoinKit.Listener {
     }
 
     val transactions = MutableLiveData<List<TransactionInfo>>()
-    val balance = MutableLiveData<Long>()
+    val balance = MutableLiveData<BalanceInfo>()
     val lastBlock = MutableLiveData<BlockInfo>()
     val state = MutableLiveData<KitState>()
     val status = MutableLiveData<State>()
     lateinit var networkName: String
-    var feePriority: FeePriority = FeePriority.Medium
     private val disposables = CompositeDisposable()
 
     private var started = false
@@ -35,6 +41,8 @@ class MainViewModel : ViewModel(), BitcoinKit.Listener {
 
     private val walletId = "MyWallet"
     private val networkType = BitcoinKit.NetworkType.MainNet
+    private val syncMode = BitcoinCore.SyncMode.Api()
+    private val bip = Bip.BIP44
 
     init {
         init()
@@ -43,7 +51,7 @@ class MainViewModel : ViewModel(), BitcoinKit.Listener {
     private fun init() {
          val words = "used ugly meat glad balance divorce inner artwork hire invest already piano".split(" ")
 
-        bitcoinKit = BitcoinKit(App.instance, words, walletId, networkType, bip = Bip.BIP44)
+        bitcoinKit = BitcoinKit(App.instance, words, walletId, networkType, syncMode = syncMode, bip = bip)
 
         bitcoinKit.listener = this
 
@@ -76,19 +84,6 @@ class MainViewModel : ViewModel(), BitcoinKit.Listener {
         init()
     }
 
-    fun receiveAddress(): String {
-        return bitcoinKit.receiveAddress()
-    }
-
-    fun send(address: String, amount: Long) {
-        val feeRate = feeRateFromPriority(feePriority)
-        bitcoinKit.send(address, amount, feeRate = feeRate)
-    }
-
-    fun fee(value: Long, address: String? = null): Long {
-        val feeRate = feeRateFromPriority(feePriority)
-        return bitcoinKit.fee(value, address, feeRate = feeRate)
-    }
 
     fun showDebugInfo() {
         bitcoinKit.showDebugInfo()
@@ -108,7 +103,7 @@ class MainViewModel : ViewModel(), BitcoinKit.Listener {
     override fun onTransactionsDelete(hashes: List<String>) {
     }
 
-    override fun onBalanceUpdate(balance: Long) {
+    override fun onBalanceUpdate(balance: BalanceInfo) {
         this.balance.postValue(balance)
     }
 
@@ -120,17 +115,86 @@ class MainViewModel : ViewModel(), BitcoinKit.Listener {
         this.state.postValue(state)
     }
 
-    private fun feeRateFromPriority(feePriority: FeePriority): Int {
-        val lowPriority = 20
-        val mediumPriority = 42
-        val highPriority = 81
-        return when (feePriority) {
-            FeePriority.Lowest -> lowPriority
-            FeePriority.Low -> (lowPriority + mediumPriority) / 2
-            FeePriority.Medium -> mediumPriority
-            FeePriority.High -> (mediumPriority + highPriority) / 2
-            FeePriority.Highest -> highPriority
-            is FeePriority.Custom -> feePriority.feeRate.toInt()
+    val receiveAddressLiveData = MutableLiveData<String>()
+    val feeLiveData = MutableLiveData<Long>()
+    val errorLiveData = MutableLiveData<String>()
+    val addressLiveData = MutableLiveData<String>()
+    val amountLiveData = MutableLiveData<Long>()
+
+    var amount: Long? = null
+        set(value) {
+            field = value
+            updateFee()
         }
+
+    var address: String? = null
+        set(value) {
+            field = value
+            updateFee()
+        }
+
+    var feePriority: FeePriority = FeePriority.Medium
+        set(value) {
+            field = value
+            updateFee()
+        }
+
+    var timeLockInterval: LockTimeInterval? = null
+        set(value) {
+            field = value
+            updateFee()
+        }
+
+    fun onReceiveClick() {
+        receiveAddressLiveData.value = bitcoinKit.receiveAddress()
+    }
+
+    fun onSendClick() {
+        if (address.isNullOrBlank()) {
+            errorLiveData.value = "Send address cannot be blank"
+        } else if (amount == null) {
+            errorLiveData.value = "Send amount cannot be blank"
+        } else {
+            try {
+                bitcoinKit.send(address!!, amount!!, feeRate = feePriority.feeRate, sortType = TransactionDataSortType.Shuffle, pluginData = getPluginData())
+
+                amountLiveData.value = null
+                feeLiveData.value = null
+                addressLiveData.value = null
+                errorLiveData.value = "Transaction sent"
+            } catch (e: Exception) {
+                errorLiveData.value = when (e) {
+                    is SendValueErrors.InsufficientUnspentOutputs,
+                    is SendValueErrors.EmptyOutputs -> "Insufficient balance"
+                    else -> e.message ?: "Failed to send transaction (${e.javaClass.name})"
+                }
+            }
+        }
+    }
+
+    fun onMaxClick() {
+        amountLiveData.value = bitcoinKit.maximumSpendableValue(address, feePriority.feeRate, getPluginData())
+    }
+
+    private fun updateFee() {
+        try {
+            feeLiveData.value = amount?.let {
+                fee(it, address)
+            }
+        } catch (e: Exception) {
+            errorLiveData.value = e.message ?: e.javaClass.simpleName
+        }
+    }
+
+    private fun fee(value: Long, address: String? = null): Long {
+        return bitcoinKit.fee(value, address, feeRate = feePriority.feeRate, pluginData = getPluginData())
+    }
+
+    private fun getPluginData(): MutableMap<Byte, IPluginData> {
+        val pluginData = mutableMapOf<Byte, IPluginData>()
+        timeLockInterval?.let {
+            pluginData[HodlerPlugin.id] = HodlerData(it)
+        }
+        return pluginData
     }
 }

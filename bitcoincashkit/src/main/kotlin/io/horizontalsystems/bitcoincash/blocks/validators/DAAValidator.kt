@@ -2,24 +2,23 @@ package io.horizontalsystems.bitcoincash.blocks.validators
 
 import io.horizontalsystems.bitcoincash.blocks.BitcoinCashBlockValidatorHelper
 import io.horizontalsystems.bitcoincore.blocks.validators.BlockValidatorException
-import io.horizontalsystems.bitcoincore.blocks.validators.IBlockValidator
+import io.horizontalsystems.bitcoincore.blocks.validators.IBlockChainedValidator
 import io.horizontalsystems.bitcoincore.crypto.CompactBits
 import io.horizontalsystems.bitcoincore.models.Block
 
-class DAAValidator(private val targetSpacing: Int, private val blockValidatorHelper: BitcoinCashBlockValidatorHelper) : IBlockValidator {
+class DAAValidator(
+        private val targetSpacing: Int,
+        private val blockValidatorHelper: BitcoinCashBlockValidatorHelper
+) : IBlockChainedValidator {
     private val largestHash = 1.toBigInteger() shl 256
-    private val diffDate = 1510600000 // 2017 November 3, 14:06 GMT
+    private val consensusDaaForkHeight = 504030 // 2017 November 3, 14:06 GMT
 
     override fun isBlockValidatable(block: Block, previousBlock: Block): Boolean {
-        return blockValidatorHelper.medianTimePast(block) >= diffDate
+        return previousBlock.height >= consensusDaaForkHeight
     }
 
     override fun validate(block: Block, previousBlock: Block) {
-        val chunk = blockValidatorHelper.getPreviousChunk(previousBlock.height, 147)
-        if (chunk.size < 147) {
-            return
-        }
-
+        val chunk = blockValidatorHelper.getPreviousChunk(previousBlock.height, 146)
         validateDAA(block, chunk)
     }
 

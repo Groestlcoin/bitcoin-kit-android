@@ -2,7 +2,10 @@ package io.horizontalsystems.bitcoincore.storage
 
 import android.arch.persistence.db.SimpleSQLiteQuery
 import io.horizontalsystems.bitcoincore.core.IStorage
+import io.horizontalsystems.bitcoincore.extensions.hexToByteArray
+import io.horizontalsystems.bitcoincore.extensions.toHexString
 import io.horizontalsystems.bitcoincore.models.*
+import io.horizontalsystems.bitcoincore.transactions.scripts.ScriptType
 
 open class Storage(protected open val store: CoreDatabase) : IStorage {
 
@@ -47,7 +50,7 @@ open class Storage(protected open val store: CoreDatabase) : IStorage {
         return store.blockHash.allBlockHashes()
     }
 
-    override fun getBlockHashHeaderHashes(except: ByteArray): List<ByteArray> {
+    override fun getBlockHashHeaderHashes(except: List<ByteArray>): List<ByteArray> {
         return store.blockHash.allBlockHashes(except)
     }
 
@@ -160,6 +163,10 @@ open class Storage(protected open val store: CoreDatabase) : IStorage {
         store.block.unstaleAllBlocks()
     }
 
+    override fun timestamps(from: Int, to: Int): List<Long> {
+        return store.block.getTimestamps(from, to)
+    }
+
     // Transaction
 
     override fun getFullTransactionInfo(transactions: List<TransactionWithBlock>): List<FullTransactionInfo> {
@@ -170,7 +177,7 @@ open class Storage(protected open val store: CoreDatabase) : IStorage {
         return transactions.map { tx ->
             FullTransactionInfo(
                     tx.block,
-                    tx.transaction,
+                    if (tx.transaction.status == Transaction.Status.INVALID) InvalidTransaction(tx.transaction, tx.transaction.serializedTxInfo) else tx.transaction,
                     inputs.filter { it.input.transactionHash.contentEquals(tx.transaction.hash) },
                     outputs.filter { it.transactionHash.contentEquals(tx.transaction.hash) }
             )
@@ -179,7 +186,7 @@ open class Storage(protected open val store: CoreDatabase) : IStorage {
 
     override fun getFullTransactionInfo(fromTransaction: Transaction?, limit: Int?): List<FullTransactionInfo> {
         var query = "SELECT transactions.*, Block.*" +
-                " FROM `Transaction` as transactions" +
+                " FROM (SELECT * FROM `Transaction` UNION ALL SELECT * FROM InvalidTransaction) as transactions" +
                 " LEFT JOIN Block ON transactions.blockHash = Block.headerHash"
 
         if (fromTransaction != null) {
@@ -211,6 +218,10 @@ open class Storage(protected open val store: CoreDatabase) : IStorage {
 
     override fun getTransaction(hash: ByteArray): Transaction? {
         return store.transaction.getByHash(hash)
+    }
+
+    override fun getValidOrInvalidTransaction(uid: String): Transaction? {
+        return store.transaction.getValidOrInvalidByUid(uid)
     }
 
     override fun getTransactionOfOutput(output: TransactionOutput): Transaction? {
@@ -257,6 +268,57 @@ open class Storage(protected open val store: CoreDatabase) : IStorage {
         return store.transaction.getByHash(hash) != null
     }
 
+    override fun getConflictingTransactions(transaction: FullTransaction): List<Transaction> {
+        val txHashes = HashSet<String>()
+        transaction.inputs.forEach { input ->
+            store.input.getInput(input.previousOutputTxHash, input.previousOutputIndex)?.transactionHash?.let { txHash ->
+                txHashes.add(txHash.toHexString())
+            }
+        }
+
+        txHashes.remove(transaction.header.hash.toHexString())
+
+        return if (txHashes.isNotEmpty()) {
+            txHashes.mapNotNull {
+                store.transaction.getByHash(it.hexToByteArray())
+            }
+        } else {
+            listOf()
+        }
+    }
+
+    override fun getIncomingPendingTxHashes(): List<ByteArray> {
+        return store.transaction.getIncomingPendingTxHashes()
+    }
+
+    override fun incomingPendingTransactionsExist(): Boolean {
+        return store.transaction.getIncomingPendingTxCount() > 0
+    }
+
+    // InvalidTransaction
+
+    override fun getInvalidTransaction(hash: ByteArray): InvalidTransaction? {
+        return store.transaction.getInvalidTransaction(hash)
+    }
+
+    override fun moveTransactionToInvalidTransactions(invalidTransactions: List<InvalidTransaction>) {
+        store.runInTransaction {
+            invalidTransactions.forEach { invalidTransaction ->
+                store.invalidTransaction.insert(invalidTransaction)
+
+                store.input.deleteByTxHash(invalidTransaction.hash)
+
+                store.output.deleteByTxHash(invalidTransaction.hash)
+
+                store.transaction.deleteByHash(invalidTransaction.hash)
+            }
+        }
+    }
+
+    override fun deleteAllInvalidTransactions() {
+        store.invalidTransaction.deleteAll()
+    }
+
     // TransactionOutput
 
     override fun getUnspentOutputs(): List<UnspentOutput> {
@@ -279,8 +341,8 @@ open class Storage(protected open val store: CoreDatabase) : IStorage {
         return store.output.getMyOutputs()
     }
 
-    override fun getOutputsForBloomFilter(blockHeight: Int, irregularScriptTypes: List<Int>): List<TransactionOutput> {
-        return store.output.getOutputsForBloomFilter(blockHeight, irregularScriptTypes)
+    override fun getOutputsForBloomFilter(blockHeight: Int, irregularScriptTypes: List<ScriptType>): List<TransactionOutput> {
+        return store.output.getOutputsForBloomFilter(blockHeight, irregularScriptTypes.map { it.value })
     }
 
     // TransactionInput
@@ -291,6 +353,14 @@ open class Storage(protected open val store: CoreDatabase) : IStorage {
 
     override fun getTransactionInputs(txHash: ByteArray): List<TransactionInput> {
         return store.input.getTransactionInputs(txHash)
+    }
+
+    override fun getTransactionInputs(txHashes: List<ByteArray>): List<TransactionInput> {
+        return store.input.getTransactionInputs(txHashes)
+    }
+
+    override fun getTransactionInputsByPrevOutputTxHash(txHash: ByteArray): List<TransactionInput> {
+        return store.input.getInputsByPrevOutputTxHash(txHash)
     }
 
     // PublicKey
@@ -305,6 +375,18 @@ open class Storage(protected open val store: CoreDatabase) : IStorage {
 
     override fun getPublicKeys(): List<PublicKey> {
         return store.publicKey.getAll()
+    }
+
+    override fun getPublicKeysUsed(): List<PublicKey> {
+        return store.publicKey.getAllUsed()
+    }
+
+    override fun getPublicKeysUnused(): List<PublicKey> {
+        return store.publicKey.getAllUnused()
+    }
+
+    override fun getPublicKeysWithUsedState(): List<PublicKeyWithUsedState> {
+        return store.publicKey.getAllWithUsedState()
     }
 
     override fun savePublicKeys(keys: List<PublicKey>) {
@@ -323,6 +405,10 @@ open class Storage(protected open val store: CoreDatabase) : IStorage {
 
     override fun updateSentTransaction(transaction: SentTransaction) {
         store.sentTransaction.insert(transaction)
+    }
+
+    override fun deleteSentTransaction(transaction: SentTransaction) {
+        store.sentTransaction.delete(transaction)
     }
 
 }

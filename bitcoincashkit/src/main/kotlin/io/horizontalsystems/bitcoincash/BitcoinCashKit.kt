@@ -8,15 +8,21 @@ import io.horizontalsystems.bitcoincash.blocks.validators.EDAValidator
 import io.horizontalsystems.bitcoincash.blocks.validators.ForkValidator
 import io.horizontalsystems.bitcoincore.AbstractKit
 import io.horizontalsystems.bitcoincore.BitcoinCore
+import io.horizontalsystems.bitcoincore.BitcoinCore.SyncMode
 import io.horizontalsystems.bitcoincore.BitcoinCoreBuilder
+import io.horizontalsystems.bitcoincore.blocks.BlockMedianTimeHelper
+import io.horizontalsystems.bitcoincore.blocks.validators.BlockValidatorChain
+import io.horizontalsystems.bitcoincore.blocks.validators.BlockValidatorSet
 import io.horizontalsystems.bitcoincore.blocks.validators.LegacyDifficultyAdjustmentValidator
-import io.horizontalsystems.bitcoincore.core.Bip
+import io.horizontalsystems.bitcoincore.blocks.validators.ProofOfWorkValidator
 import io.horizontalsystems.bitcoincore.extensions.toReversedByteArray
+import io.horizontalsystems.bitcoincore.managers.Bip44RestoreKeyConverter
 import io.horizontalsystems.bitcoincore.managers.InsightApi
 import io.horizontalsystems.bitcoincore.models.TransactionInfo
 import io.horizontalsystems.bitcoincore.network.Network
 import io.horizontalsystems.bitcoincore.storage.CoreDatabase
 import io.horizontalsystems.bitcoincore.storage.Storage
+import io.horizontalsystems.bitcoincore.utils.Base58AddressConverter
 import io.horizontalsystems.bitcoincore.utils.CashAddressConverter
 import io.horizontalsystems.bitcoincore.utils.PaymentAddressParser
 import io.horizontalsystems.hdwalletkit.Mnemonic
@@ -45,7 +51,7 @@ class BitcoinCashKit : AbstractKit {
             walletId: String,
             networkType: NetworkType = NetworkType.MainNet,
             peerSize: Int = 10,
-            syncMode: BitcoinCore.SyncMode = BitcoinCore.SyncMode.Api(),
+            syncMode: SyncMode = SyncMode.Api(),
             confirmationsThreshold: Int = 6
     ) : this(context, Mnemonic().toSeed(words), walletId, networkType, peerSize, syncMode, confirmationsThreshold)
 
@@ -55,16 +61,16 @@ class BitcoinCashKit : AbstractKit {
             walletId: String,
             networkType: NetworkType = NetworkType.MainNet,
             peerSize: Int = 10,
-            syncMode: BitcoinCore.SyncMode = BitcoinCore.SyncMode.Api(),
+            syncMode: SyncMode = SyncMode.Api(),
             confirmationsThreshold: Int = 6
     ) {
-        val database = CoreDatabase.getInstance(context, getDatabaseName(networkType, walletId))
+        val database = CoreDatabase.getInstance(context, getDatabaseName(networkType, walletId, syncMode))
         val storage = Storage(database)
         val initialSyncUrl: String
 
         network = when (networkType) {
             NetworkType.MainNet -> {
-                initialSyncUrl = "https://blockdozer.com/api"
+                initialSyncUrl = "https://cashexplorer.bitcoin.com/api"
                 MainNetBitcoinCash()
             }
             NetworkType.TestNet -> {
@@ -76,6 +82,22 @@ class BitcoinCashKit : AbstractKit {
         val paymentAddressParser = PaymentAddressParser("bitcoincash", removeScheme = false)
         val initialSyncApi = InsightApi(initialSyncUrl)
 
+        val blockValidatorSet = BlockValidatorSet()
+        blockValidatorSet.addBlockValidator(ProofOfWorkValidator())
+
+        val blockValidatorChain = BlockValidatorChain()
+        if (networkType == NetworkType.MainNet) {
+            val blockHelper = BitcoinCashBlockValidatorHelper(storage)
+
+            val daaValidator = DAAValidator(targetSpacing, blockHelper)
+            blockValidatorChain.add(ForkValidator(svForkHeight, abcForkBlockHash, daaValidator))
+            blockValidatorChain.add(daaValidator)
+            blockValidatorChain.add(LegacyDifficultyAdjustmentValidator(blockHelper, heightInterval, targetTimespan, maxTargetBits))
+            blockValidatorChain.add(EDAValidator(maxTargetBits, blockHelper, BlockMedianTimeHelper(storage)))
+        }
+
+        blockValidatorSet.addBlockValidator(blockValidatorChain)
+
         bitcoinCore = BitcoinCoreBuilder()
                 .setContext(context)
                 .setSeed(seed)
@@ -86,45 +108,41 @@ class BitcoinCashKit : AbstractKit {
                 .setConfirmationThreshold(confirmationsThreshold)
                 .setStorage(storage)
                 .setInitialSyncApi(initialSyncApi)
+                .setBlockValidator(blockValidatorSet)
                 .build()
 
         //  extending bitcoinCore
 
         val bech32 = CashAddressConverter(network.addressSegwitHrp)
+        val base58 = Base58AddressConverter(network.addressVersion, network.addressScriptVersion)
+
         bitcoinCore.prependAddressConverter(bech32)
 
-        if (networkType == NetworkType.MainNet) {
-            val blockHelper = BitcoinCashBlockValidatorHelper(storage)
-
-            val svForkHeight = 556767
-            val abcForkBlockHash = "0000000000000000004626ff6e3b936941d341c5932ece4357eeccac44e6d56c".toReversedByteArray()
-
-            val daaValidator = DAAValidator(targetSpacing, blockHelper)
-            bitcoinCore.addBlockValidator(ForkValidator(svForkHeight, abcForkBlockHash, daaValidator))
-            bitcoinCore.addBlockValidator(daaValidator)
-            bitcoinCore.addBlockValidator(LegacyDifficultyAdjustmentValidator(blockHelper, heightInterval, targetTimespan, maxTargetBits))
-            bitcoinCore.addBlockValidator(EDAValidator(maxTargetBits, blockHelper, network.bip44CheckpointBlock.height))
-        }
-
-        bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP44)
+        bitcoinCore.addRestoreKeyConverter(Bip44RestoreKeyConverter(base58))
     }
 
-    fun transactions(fromHash: String? = null, limit: Int? = null): Single<List<TransactionInfo>> {
-        return bitcoinCore.transactions(fromHash, limit)
+    fun transactions(fromUid: String? = null, limit: Int? = null): Single<List<TransactionInfo>> {
+        return bitcoinCore.transactions(fromUid, limit)
     }
 
     companion object {
         val maxTargetBits: Long = 0x1d00ffff                // Maximum difficulty
-
         val targetSpacing = 10 * 60                         // 10 minutes per block.
         val targetTimespan: Long = 14 * 24 * 60 * 60        // 2 weeks per difficulty cycle, on average.
         var heightInterval = targetTimespan / targetSpacing // 2016 blocks
+        val svForkHeight = 556767
+        val abcForkBlockHash = "0000000000000000004626ff6e3b936941d341c5932ece4357eeccac44e6d56c".toReversedByteArray()
 
-
-        private fun getDatabaseName(networkType: NetworkType, walletId: String): String = "BitcoinCash-${networkType.name}-$walletId"
+        private fun getDatabaseName(networkType: NetworkType, walletId: String, syncMode: SyncMode): String = "BitcoinCash-${networkType.name}-$walletId-${syncMode.javaClass.simpleName}"
 
         fun clear(context: Context, networkType: NetworkType, walletId: String) {
-            SQLiteDatabase.deleteDatabase(context.getDatabasePath(getDatabaseName(networkType, walletId)))
+            for (syncMode in listOf(SyncMode.Api(), SyncMode.Full(), SyncMode.NewWallet())) {
+                try {
+                    SQLiteDatabase.deleteDatabase(context.getDatabasePath(getDatabaseName(networkType, walletId, syncMode)))
+                } catch (ex: Exception) {
+                    continue
+                }
+            }
         }
     }
 

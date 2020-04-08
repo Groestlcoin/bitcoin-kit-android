@@ -10,15 +10,15 @@ class LegacyDifficultyAdjustmentValidator(
         private val validatorHelper: BlockValidatorHelper,
         private val heightInterval: Long,
         private val targetTimespan: Long,
-        private val maxTargetBits: Long)
-    : IBlockValidator {
+        private val maxTargetBits: Long
+) : IBlockChainedValidator {
 
     override fun isBlockValidatable(block: Block, previousBlock: Block): Boolean {
         return block.height % heightInterval == 0L
     }
 
     override fun validate(block: Block, previousBlock: Block) {
-        val lastCheckPointBlock = checkNotNull(validatorHelper.getPrevious(block, 2016)) {
+        val lastCheckPointBlock = checkNotNull(validatorHelper.getPrevious(block, heightInterval.toInt())) {
             BlockValidatorException.NoCheckpointBlock()
         }
 
