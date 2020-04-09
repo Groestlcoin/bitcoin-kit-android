@@ -29,7 +29,7 @@ class DarkGravityWaveValidatorTest : Spek({
     val heightInterval = 24
 
     val validator by memoized {
-        DarkGravityWaveValidator(blockHelper, 24, 1440, 0x1e0fffff, 0, 100000)
+        DarkGravityWaveValidator(blockHelper, 24, 1440, 0x1e0fffff, 100000)
     }
 
     describe("#validate") {

@@ -5,7 +5,7 @@ import io.horizontalsystems.bitcoincore.network.Network
 import io.horizontalsystems.bitcoincore.storage.BlockHeader
 import io.horizontalsystems.bitcoincore.utils.HashUtils
 
-class TestNet : Network() {
+class TestNetGroestlcoin : Network() {
 
     override var port: Int = 17777
 
@@ -16,6 +16,7 @@ class TestNet : Network() {
     override var addressSegwitHrp: String = "tgrs"
     override var addressScriptVersion: Int = 196
     override var coinType: Int = 1
+    override val dustRelayTxFee = 3000 // https://github.com/bitcoin/bitcoin/blob/c536dfbcb00fb15963bf5d507b7017c241718bf6/src/policy/policy.h#L50
 
     override val maxBlockSize = 1_000_000
 
@@ -24,7 +25,7 @@ class TestNet : Network() {
             "testnet-seed2.groestlcoin.org"
     )
 
-    override val bip44CheckpointBlock = Block(BlockHeader(
+    val bip44CheckpointBlock = Block(BlockHeader(
             version = 3,
             previousBlockHeaderHash = HashUtils.toBytesAsLE("000000ffbb50fc9898cdd36ec163e6ba23230164c0052a28876255b7dcf2cd36"),
             merkleRoot = HashUtils.toBytesAsLE("fb6cde21ddf87d46a9816f9a107a05b375ff65d48ba3a6da48d5d48af62ec177"),
@@ -34,7 +35,7 @@ class TestNet : Network() {
             hash = HashUtils.toBytesAsLE("000000458242a5d60e943f0a9945c29040b32be35582d1bfd47b5c536f10ac30")
     ), 1)
 
-    override val lastCheckpointBlock = Block(BlockHeader(
+    val lastCheckpointBlock = Block(BlockHeader(
             version = 536870912,
             previousBlockHeaderHash = HashUtils.toBytesAsLE("000000bd9be35095518f99714b0a67390d126b250a16bfe726d4083cd9661003"),
             merkleRoot = HashUtils.toBytesAsLE("a4b95606216688df433669202442c56d207ab679ffb5f8567161390214e7ced6"),

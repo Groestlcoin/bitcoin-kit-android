@@ -31,7 +31,7 @@ class GroestlcoinBase58AddressConverter(private val addressVersion: Int, private
 
     }
 
-    override fun convert(bytes: ByteArray, scriptType: Int): Address {
+    override fun convert(bytes: ByteArray, scriptType: ScriptType): Address {
         val addressType: AddressType
         val addressVersion: Int
 
@@ -59,7 +59,7 @@ class GroestlcoinBase58AddressConverter(private val addressVersion: Int, private
         return LegacyAddress(addressString, bytes, addressType)
     }
 
-    override fun convert(publicKey: PublicKey, scriptType: Int): Address {
+    override fun convert(publicKey: PublicKey, scriptType: ScriptType): Address {
         var keyhash = publicKey.publicKeyHash
 
         if (scriptType == ScriptType.P2WPKHSH) {

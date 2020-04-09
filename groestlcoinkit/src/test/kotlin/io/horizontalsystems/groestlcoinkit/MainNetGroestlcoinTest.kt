@@ -9,15 +9,15 @@ import org.powermock.core.classloader.annotations.PrepareForTest
 import org.powermock.modules.junit4.PowerMockRunner
 
 @RunWith(PowerMockRunner::class)
-@PrepareForTest(MainNet::class)
+@PrepareForTest(MainNetGroestlcoin::class)
 
-class MainNetTest {
+class MainNetGroestlcoinTest {
 
-    private lateinit var network: MainNet
+    private lateinit var network: MainNetGroestlcoin
 
     @Before
     fun setup() {
-        network = MainNet()
+        network = MainNetGroestlcoin()
     }
 
     @Test

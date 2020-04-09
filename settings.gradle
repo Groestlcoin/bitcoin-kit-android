@@ -5,5 +5,5 @@ include ':app',             // Demo app
         ':bitcoincashkit',  // Bitcoin Cash kit
         ':litecoinkit',     // Litecoin kit
         ':hodler',          // Hodler
-        ':tools'            // Checkpoint syncer
+        ':tools',           // Checkpoint syncer
         ':groestlcoinkit'   // Groestlcoin kit

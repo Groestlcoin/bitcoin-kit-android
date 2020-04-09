@@ -34,9 +34,9 @@ open class BitcoinCoreBuilder {
     private var words: List<String>? = null
     private var network: Network? = null
     private var paymentAddressParser: PaymentAddressParser? = null
-    private var storage: IStorage? = null
+    protected var storage: IStorage? = null
     private var initialSyncApi: IInitialSyncApi? = null
-    private var bip: Bip = Bip.BIP44
+    protected var bip: Bip = Bip.BIP44
     private var blockHeaderHasher: IHasher? = null
     private var transactionInfoConverter: ITransactionInfoConverter? = null
     private var blockValidator: IBlockValidator? = null
@@ -46,6 +46,7 @@ open class BitcoinCoreBuilder {
     private var syncMode: BitcoinCore.SyncMode = BitcoinCore.SyncMode.Api()
     private var peerSize = 10
     private val plugins = mutableListOf<IPlugin>()
+    protected lateinit var hdWallet: HDWallet
 
     fun setContext(context: Context): BitcoinCoreBuilder {
         this.context = context
@@ -147,7 +148,7 @@ open class BitcoinCoreBuilder {
 
         val connectionManager = ConnectionManager(context)
 
-        val hdWallet = HDWallet(seed, network.coinType, purpose = bip.purpose)
+        hdWallet = HDWallet(seed, network.coinType, purpose = bip.purpose)
 
         val publicKeyManager = PublicKeyManager.create(storage, hdWallet, restoreKeyConverterChain)
         val pendingOutpointsProvider = PendingOutpointsProvider(storage)
@@ -595,5 +596,9 @@ class BitcoinCore(
         class Full : SyncMode()
         class Api : SyncMode()
         class NewWallet : SyncMode()
+    }
+
+    fun replaceTransactionBuilder(transactionBuilder: TransactionBuilder) {
+        transactionCreator.replaceTransactionBuilder(transactionBuilder)
     }
 }

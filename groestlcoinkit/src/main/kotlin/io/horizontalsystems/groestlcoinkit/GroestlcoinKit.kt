@@ -4,17 +4,14 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import io.horizontalsystems.bitcoincore.AbstractKit
 import io.horizontalsystems.bitcoincore.BitcoinCore
-import io.horizontalsystems.bitcoincore.BitcoinCoreBuilder
-import io.horizontalsystems.bitcoincore.blocks.validators.BitsValidator
-import io.horizontalsystems.bitcoincore.blocks.validators.LegacyDifficultyAdjustmentValidator
-import io.horizontalsystems.bitcoincore.blocks.validators.LegacyTestNetDifficultyValidator
+import io.horizontalsystems.bitcoincore.blocks.validators.*
 import io.horizontalsystems.bitcoincore.core.Bip
-import io.horizontalsystems.bitcoincore.managers.BCoinApi
-import io.horizontalsystems.bitcoincore.managers.BlockValidatorHelper
+import io.horizontalsystems.bitcoincore.managers.*
 import io.horizontalsystems.bitcoincore.models.TransactionInfo
 import io.horizontalsystems.bitcoincore.network.Network
 import io.horizontalsystems.bitcoincore.storage.CoreDatabase
 import io.horizontalsystems.bitcoincore.storage.Storage
+import io.horizontalsystems.bitcoincore.utils.Base58AddressConverter
 import io.horizontalsystems.bitcoincore.utils.PaymentAddressParser
 import io.horizontalsystems.bitcoincore.utils.SegwitAddressConverter
 import io.horizontalsystems.groestlcoinkit.core.SingleSha256Hasher
@@ -68,11 +65,11 @@ class GroestlcoinKit : AbstractKit {
         network = when (networkType) {
             NetworkType.MainNet -> {
                 initialSyncUrl = "https://chainz.cryptoid.info/grs"
-                MainNet()
+                MainNetGroestlcoin()
             }
             NetworkType.TestNet -> {
                 initialSyncUrl = "https://chainz.cryptoid.info/grs-test/api.dws?key=d47da926b82e&q="
-                TestNet()
+                TestNetGroestlcoin()
             }
         }
 
@@ -99,32 +96,32 @@ class GroestlcoinKit : AbstractKit {
 
         val blockHelper = BlockValidatorHelper(storage)
 
-        /*if (networkType == NetworkType.MainNet) {
-            bitcoinCore.addBlockValidator(LegacyDifficultyAdjustmentValidator(blockHelper, BitcoinCore.heightInterval, BitcoinCore.targetTimespan, BitcoinCore.maxTargetBits))
-            bitcoinCore.addBlockValidator(BitsValidator())
-        } else if (networkType == NetworkType.TestNet) {
-            bitcoinCore.addBlockValidator(LegacyDifficultyAdjustmentValidator(blockHelper, BitcoinCore.heightInterval, BitcoinCore.targetTimespan, BitcoinCore.maxTargetBits))
-            bitcoinCore.addBlockValidator(LegacyTestNetDifficultyValidator(storage, BitcoinCore.heightInterval, BitcoinCore.targetSpacing, BitcoinCore.maxTargetBits))
-            bitcoinCore.addBlockValidator(BitsValidator())
-        }*/
+        val blockValidatorSet = BlockValidatorSet()
+        blockValidatorSet.addBlockValidator(ProofOfWorkValidator())
+        val blockValidatorChain = BlockValidatorChain()
 
-        if (network is MainNet) {
-            bitcoinCore.addBlockValidator(DarkGravityWaveValidator(blockHelper, heightInterval, targetTimespan, maxTargetBits, network.lastCheckpointBlock.height, 99999))
+        if (network is MainNetGroestlcoin) {
+            blockValidatorChain.add(DarkGravityWaveValidator(blockHelper, heightInterval, targetTimespan, maxTargetBits, 99999))
         } else {
-            bitcoinCore.addBlockValidator(DarkGravityWaveValidator(blockHelper, heightInterval, targetTimespan, maxTargetBits, network.lastCheckpointBlock.height, 99999))
+            blockValidatorChain.add(DarkGravityWaveValidator(blockHelper, heightInterval, targetTimespan, maxTargetBits, 99999))
         }
+
+        blockValidatorSet.addBlockValidator(blockValidatorChain)
+
+        val bech32AddressConverter = SegwitAddressConverter(network.addressSegwitHrp)
+        val base58AddressConverter = Base58AddressConverter(network.addressVersion, network.addressScriptVersion)
 
         when (bip) {
             Bip.BIP44 -> {
-                bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP44)
-                bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP49)
-                bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP84)
+                bitcoinCore.addRestoreKeyConverter(Bip44RestoreKeyConverter(base58AddressConverter))
+                bitcoinCore.addRestoreKeyConverter(Bip49RestoreKeyConverter(base58AddressConverter))
+                bitcoinCore.addRestoreKeyConverter(Bip84RestoreKeyConverter(bech32AddressConverter))
             }
             Bip.BIP49 -> {
-                bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP49)
+                bitcoinCore.addRestoreKeyConverter(Bip49RestoreKeyConverter(base58AddressConverter))
             }
             Bip.BIP84 -> {
-                bitcoinCore.addRestoreKeyConverterForBip(Bip.BIP84)
+                bitcoinCore.addRestoreKeyConverter(Bip84RestoreKeyConverter(bech32AddressConverter))
             }
         }
 

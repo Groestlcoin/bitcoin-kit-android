@@ -2,16 +2,17 @@ package io.horizontalsystems.groestlcoinkit
 
 import io.horizontalsystems.bitcoincore.BitcoinCore
 import io.horizontalsystems.bitcoincore.BitcoinCoreBuilder
+import io.horizontalsystems.bitcoincore.DustCalculator
+import io.horizontalsystems.bitcoincore.core.PluginManager
+import io.horizontalsystems.bitcoincore.core.TransactionDataSorterFactory
+import io.horizontalsystems.bitcoincore.managers.PublicKeyManager
+import io.horizontalsystems.bitcoincore.managers.RestoreKeyConverterChain
 import io.horizontalsystems.bitcoincore.managers.UnspentOutputSelectorChain
 import io.horizontalsystems.bitcoincore.network.Network
 import io.horizontalsystems.bitcoincore.network.messages.*
-import io.horizontalsystems.bitcoincore.network.peer.PeerGroup
 import io.horizontalsystems.bitcoincore.serializers.BlockHeaderParser
 import io.horizontalsystems.bitcoincore.transactions.*
-import io.horizontalsystems.bitcoincore.transactions.builder.InputSigner
-import io.horizontalsystems.bitcoincore.transactions.builder.TransactionBuilder
-import io.horizontalsystems.bitcoincore.transactions.scripts.ScriptBuilder
-import io.horizontalsystems.groestlcoinkit.core.SingleSha256Hasher
+import io.horizontalsystems.bitcoincore.transactions.builder.*
 import io.horizontalsystems.groestlcoinkit.network.messages.GroestlcoinNetworkMessageParser
 import io.horizontalsystems.groestlcoinkit.network.messages.GroestlcoinNetworkMessageSerializer
 import io.horizontalsystems.groestlcoinkit.network.messages.GroestlcoinTransactionMessageParser
@@ -34,10 +35,28 @@ class GroestlcoinCoreBuilder : BitcoinCoreBuilder {
     override fun build(): BitcoinCore {
         val network = checkNotNull(this.network)
         val bitcoinCore : BitcoinCore = super.build()
+        val storage = this.storage!!
         bitcoinCore.networkMessageSerializer = GroestlcoinNetworkMessageSerializer(network.magic)
         bitcoinCore.networkMessageParser = GroestlcoinNetworkMessageParser(network.magic)
 
-        val transactionBuilder = GroestlcoinTransactionBuilder(ScriptBuilder(), GroestlcoinInputSigner(hdWallet, network))
+        val restoreKeyConverterChain = RestoreKeyConverterChain()
+
+        val pluginManager = PluginManager()
+        restoreKeyConverterChain.add(pluginManager)
+
+        val publicKeyManager = PublicKeyManager.create(storage, hdWallet, restoreKeyConverterChain)
+        val transactionDataSorterFactory = TransactionDataSorterFactory()
+        val unspentOutputSelector = UnspentOutputSelectorChain()
+        val transactionSizeCalculator = TransactionSizeCalculator()
+        val inputSigner = GroestlcoinInputSigner(hdWallet, network)
+        val outputSetter = OutputSetter(transactionDataSorterFactory)
+        val dustCalculator = DustCalculator(network.dustRelayTxFee, transactionSizeCalculator)
+        val inputSetter = InputSetter(unspentOutputSelector, publicKeyManager, addressConverter, bip.scriptType, transactionSizeCalculator, pluginManager, dustCalculator, transactionDataSorterFactory)
+        val signer = TransactionSigner(inputSigner)
+        val lockTimeSetter = LockTimeSetter(storage)
+        val recipientSetter = RecipientSetter(addressConverter, pluginManager)
+
+        val transactionBuilder = GroestlcoinTransactionBuilder(recipientSetter, outputSetter, inputSetter, signer, lockTimeSetter)
         bitcoinCore.replaceTransactionBuilder(transactionBuilder)
 
         bitcoinCore.addMessageParser(AddrMessageParser())

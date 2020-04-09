@@ -6,7 +6,7 @@ import io.horizontalsystems.bitcoincore.models.TransactionOutput
 import io.horizontalsystems.bitcoincore.storage.FullTransaction
 import io.horizontalsystems.bitcoincore.storage.InputToSign
 
-class MutableTransaction(isOutgoing: Boolean = true) {
+open class MutableTransaction(isOutgoing: Boolean = true) {
 
     val transaction = Transaction(2, 0)
     val inputsToSign = mutableListOf<InputToSign>()
@@ -46,7 +46,7 @@ class MutableTransaction(isOutgoing: Boolean = true) {
         return pluginData
     }
 
-    fun build(): FullTransaction {
+    open fun build(): FullTransaction {
         return FullTransaction(transaction, inputsToSign.map { it.input }, outputs)
     }
 

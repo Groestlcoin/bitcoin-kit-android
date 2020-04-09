@@ -1,5 +1,6 @@
 package io.horizontalsystems.groestlcoinkit.managers
 
+import com.eclipsesource.json.JsonObject
 import io.horizontalsystems.bitcoincore.core.IInitialSyncApi
 import io.horizontalsystems.bitcoincore.managers.ApiManager
 import io.horizontalsystems.bitcoincore.managers.TransactionItem
@@ -24,7 +25,7 @@ class ChainzApi(host: String) : IInitialSyncApi {
 
     private fun fetchTransactions(addrs: List<String>, txs: MutableList<TransactionItem>, from: Int, to: Int) {
         val joinedAddresses = addrs.joinToString("|")
-        val json = apiManager.getJson(url_prefix + "multiaddr&active=$joinedAddresses?from=$from&to=$to")
+        val json = apiManager.doOkHttpGet(false, url_prefix + "multiaddr&active=$joinedAddresses?from=$from&to=$to") as JsonObject
 
         val addresses = json["addresses"].asArray()
         val txArray = json["txs"].asArray()
@@ -38,11 +39,11 @@ class ChainzApi(host: String) : IInitialSyncApi {
         }
 
         if(oldestTx != "") {
-            val txinfoJson = apiManager.getJson(url_prefix + "txinfo&t=$oldestTx")
+            val txinfoJson = apiManager.doOkHttpGet(false, url_prefix + "txinfo&t=$oldestTx") as JsonObject
 
             val blockheight = txinfoJson["block"].asInt()
 
-            var blockHash: String = apiManager.getString(url_prefix + "getblockhash&height=$blockheight")
+            var blockHash: String = apiManager.doOkHttpGet(false, url_prefix + "getblockhash&height=$blockheight").asString()
             blockHash = blockHash.subSequence(1, 64).toString() // remove the \" at the beginning and end
 
             val outputs = mutableListOf<TransactionOutputItem>()
