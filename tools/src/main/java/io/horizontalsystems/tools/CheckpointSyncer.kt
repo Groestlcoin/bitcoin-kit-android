@@ -14,6 +14,9 @@ import io.horizontalsystems.bitcoincore.network.peer.PeerManager
 import io.horizontalsystems.bitcoincore.network.peer.task.GetBlockHeadersTask
 import io.horizontalsystems.bitcoincore.network.peer.task.PeerTask
 import io.horizontalsystems.bitcoincore.storage.BlockHeader
+import io.horizontalsystems.groestlcoinkit.GroestlHasher
+import io.horizontalsystems.groestlcoinkit.MainNetGroestlcoin
+import io.horizontalsystems.groestlcoinkit.TestNetGroestlcoin
 import io.horizontalsystems.dashkit.MainNetDash
 import io.horizontalsystems.dashkit.TestNetDash
 import io.horizontalsystems.dashkit.X11Hasher
@@ -52,6 +55,7 @@ class CheckpointSyncer(
         val blockHeaderHasher = when (network) {
             is TestNetDash,
             is MainNetDash -> X11Hasher()
+            is MainNetGroestlcoin, is TestNetGroestlcoin -> GroestlHasher()
             else -> DoubleSha256Hasher()
         }
 
