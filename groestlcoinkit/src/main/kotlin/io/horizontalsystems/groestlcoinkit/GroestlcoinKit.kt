@@ -16,6 +16,7 @@ import io.horizontalsystems.bitcoincore.utils.PaymentAddressParser
 import io.horizontalsystems.bitcoincore.utils.SegwitAddressConverter
 import io.horizontalsystems.groestlcoinkit.core.SingleSha256Hasher
 import io.horizontalsystems.groestlcoinkit.managers.ChainzApi
+import io.horizontalsystems.groestlcoinkit.utils.GroestlcoinBase58AddressConverter
 import io.horizontalsystems.groestlcoinkit.validators.DarkGravityWaveValidator
 import io.horizontalsystems.hdwalletkit.Mnemonic
 import io.reactivex.Single
@@ -91,9 +92,6 @@ class GroestlcoinKit : AbstractKit {
 
         //  extending bitcoinCore
 
-        val bech32 = SegwitAddressConverter(network.addressSegwitHrp)
-        bitcoinCore.prependAddressConverter(bech32)
-
         val blockHelper = BlockValidatorHelper(storage)
 
         val blockValidatorSet = BlockValidatorSet()
@@ -110,6 +108,10 @@ class GroestlcoinKit : AbstractKit {
 
         val bech32AddressConverter = SegwitAddressConverter(network.addressSegwitHrp)
         val base58AddressConverter = Base58AddressConverter(network.addressVersion, network.addressScriptVersion)
+
+        bitcoinCore.prependAddressConverter(bech32AddressConverter)
+        bitcoinCore.prependAddressConverter(base58AddressConverter)
+
 
         when (bip) {
             Bip.BIP44 -> {

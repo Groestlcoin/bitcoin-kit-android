@@ -84,8 +84,6 @@ class GroestlcoinCoreBuilder : BitcoinCoreBuilder {
         bitcoinCore.peerGroup.setNetworkMessageSerializer(bitcoinCore.networkMessageSerializer)
         bitcoinCore.peerGroup.setNetworkMessageParser(bitcoinCore.networkMessageParser)
 
-        bitcoinCore.prependAddressConverter(GroestlcoinBase58AddressConverter(network.addressVersion, network.addressScriptVersion))
-
         return bitcoinCore
     }
 }
