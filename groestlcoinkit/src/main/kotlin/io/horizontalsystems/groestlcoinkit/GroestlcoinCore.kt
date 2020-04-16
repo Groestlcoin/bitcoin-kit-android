@@ -5,9 +5,7 @@ import io.horizontalsystems.bitcoincore.BitcoinCoreBuilder
 import io.horizontalsystems.bitcoincore.DustCalculator
 import io.horizontalsystems.bitcoincore.core.PluginManager
 import io.horizontalsystems.bitcoincore.core.TransactionDataSorterFactory
-import io.horizontalsystems.bitcoincore.managers.PublicKeyManager
-import io.horizontalsystems.bitcoincore.managers.RestoreKeyConverterChain
-import io.horizontalsystems.bitcoincore.managers.UnspentOutputSelectorChain
+import io.horizontalsystems.bitcoincore.managers.*
 import io.horizontalsystems.bitcoincore.network.Network
 import io.horizontalsystems.bitcoincore.network.messages.*
 import io.horizontalsystems.bitcoincore.serializers.BlockHeaderParser
@@ -47,6 +45,10 @@ class GroestlcoinCoreBuilder : BitcoinCoreBuilder {
         val publicKeyManager = PublicKeyManager.create(storage, hdWallet, restoreKeyConverterChain)
         val transactionDataSorterFactory = TransactionDataSorterFactory()
         val unspentOutputSelector = UnspentOutputSelectorChain()
+        val calculator = TransactionSizeCalculator()
+        val unspentOutputProvider = UnspentOutputProvider(storage, confirmationsThreshold, pluginManager)
+        unspentOutputSelector.prependSelector(UnspentOutputSelector(calculator, unspentOutputProvider))
+        unspentOutputSelector.prependSelector(UnspentOutputSelectorSingleNoChange(calculator, unspentOutputProvider))
         val transactionSizeCalculator = TransactionSizeCalculator()
         val inputSigner = GroestlcoinInputSigner(hdWallet, network)
         val outputSetter = OutputSetter(transactionDataSorterFactory)

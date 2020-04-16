@@ -42,7 +42,7 @@ open class BitcoinCoreBuilder {
     private var blockValidator: IBlockValidator? = null
 
     // parameters with default values
-    private var confirmationsThreshold = 6
+    protected var confirmationsThreshold = 6
     private var syncMode: BitcoinCore.SyncMode = BitcoinCore.SyncMode.Api()
     private var peerSize = 10
     private val plugins = mutableListOf<IPlugin>()
