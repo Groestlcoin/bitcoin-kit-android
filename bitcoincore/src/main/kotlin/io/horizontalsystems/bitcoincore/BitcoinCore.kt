@@ -377,6 +377,10 @@ class BitcoinCore(
         addressConverter.prependConverter(converter)
     }
 
+    fun removeAllAddressConverters() {
+        addressConverter.clearConverters()
+    }
+
     // END: Extending
 
     var listenerExecutor: Executor = DirectExecutor()

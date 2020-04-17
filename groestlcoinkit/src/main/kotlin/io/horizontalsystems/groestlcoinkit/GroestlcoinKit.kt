@@ -14,7 +14,6 @@ import io.horizontalsystems.bitcoincore.storage.Storage
 import io.horizontalsystems.bitcoincore.utils.Base58AddressConverter
 import io.horizontalsystems.bitcoincore.utils.PaymentAddressParser
 import io.horizontalsystems.bitcoincore.utils.SegwitAddressConverter
-import io.horizontalsystems.groestlcoinkit.core.SingleSha256Hasher
 import io.horizontalsystems.groestlcoinkit.managers.ChainzApi
 import io.horizontalsystems.groestlcoinkit.utils.GroestlcoinBase58AddressConverter
 import io.horizontalsystems.groestlcoinkit.validators.DarkGravityWaveValidator
@@ -65,7 +64,7 @@ class GroestlcoinKit : AbstractKit {
 
         network = when (networkType) {
             NetworkType.MainNet -> {
-                initialSyncUrl = "https://chainz.cryptoid.info/grs"
+                initialSyncUrl = "https://chainz.cryptoid.info/grs/api.dws?key=d47da926b82e&q="
                 MainNetGroestlcoin()
             }
             NetworkType.TestNet -> {
@@ -107,8 +106,9 @@ class GroestlcoinKit : AbstractKit {
         blockValidatorSet.addBlockValidator(blockValidatorChain)
 
         val bech32AddressConverter = SegwitAddressConverter(network.addressSegwitHrp)
-        val base58AddressConverter = Base58AddressConverter(network.addressVersion, network.addressScriptVersion)
+        val base58AddressConverter = GroestlcoinBase58AddressConverter(network.addressVersion, network.addressScriptVersion)
 
+        bitcoinCore.removeAllAddressConverters()
         bitcoinCore.prependAddressConverter(bech32AddressConverter)
         bitcoinCore.prependAddressConverter(base58AddressConverter)
 
@@ -126,9 +126,6 @@ class GroestlcoinKit : AbstractKit {
                 bitcoinCore.addRestoreKeyConverter(Bip84RestoreKeyConverter(bech32AddressConverter))
             }
         }
-
-        val singleHasher = SingleSha256Hasher()
-
     }
 
     fun transactions(fromHash: String? = null, limit: Int? = null): Single<List<TransactionInfo>> {

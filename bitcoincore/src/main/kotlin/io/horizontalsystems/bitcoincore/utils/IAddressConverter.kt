@@ -23,6 +23,10 @@ class AddressConverterChain : IAddressConverter {
         concreteConverters.add(0, converter)
     }
 
+    fun clearConverters() {
+        concreteConverters.clear()
+    }
+
     override fun convert(addressString: String): Address {
         val exceptions = mutableListOf<Exception>()
 
