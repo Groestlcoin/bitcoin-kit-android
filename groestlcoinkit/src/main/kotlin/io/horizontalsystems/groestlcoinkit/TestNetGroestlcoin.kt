@@ -45,4 +45,6 @@ class TestNetGroestlcoin : Network() {
             hash = HashUtils.toBytesAsLE("000000a4466ac156b2ca13663d1f8fae30cb20ed8c9d1e5af85ef1fd8fc208c4")
     ), 1294877)
 
+    override val kitName: String = "GroestlcoinKit"
+
 }

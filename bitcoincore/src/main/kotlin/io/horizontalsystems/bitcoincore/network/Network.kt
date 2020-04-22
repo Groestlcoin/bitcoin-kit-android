@@ -33,4 +33,7 @@ abstract class Network {
 
     open val sigHashForked: Boolean = false
     open val sigHashValue = Sighash.ALL
+
+    open val kitName: String
+        get() = "BitcoinKit"
 }

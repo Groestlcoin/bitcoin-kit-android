@@ -46,4 +46,7 @@ class MainNetGroestlcoin : Network() {
             nonce = 529959857,
             hash = HashUtils.toBytesAsLE("000000000000032ad22aabbaf6350d5a50174b905e61e3dfec8bba41d5f755cc")
     ), 2738651)
+
+    override val kitName: String = "GroestlcoinKit"
+
 }

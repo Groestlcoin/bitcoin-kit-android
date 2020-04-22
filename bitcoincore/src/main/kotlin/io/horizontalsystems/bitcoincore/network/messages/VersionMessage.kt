@@ -10,13 +10,15 @@ import java.net.InetAddress
 
 class VersionMessage(val protocolVersion: Int, val services: Long, val timestamp: Long, val recipientAddress: NetworkAddress) : IMessage {
 
+    var network: Network? = null
+
     lateinit var senderAddress: NetworkAddress
 
     // Random value to identify sending node
     var nonce = 0L
 
     // User-Agent as defined in <a href="https://github.com/bitcoin/bips/blob/master/bip-0014.mediawiki">BIP 14</a>.
-    var subVersion = "/BitcoinKit:0.1.0/"
+    var subVersion = "/BitcoinKit:0.5.0/"
 
     // How many blocks are in the chain, according to the other side.
     var lastBlock: Int = 0
@@ -29,6 +31,10 @@ class VersionMessage(val protocolVersion: Int, val services: Long, val timestamp
         lastBlock = bestBlock
         senderAddress = NetworkAddress(NetworkUtils.getLocalInetAddress(), network)
         nonce = (Math.random() * java.lang.Long.MAX_VALUE).toLong() //Random node id generated at startup.
+        this.network = network
+        subVersion = "/${if(network != null && !network!!.kitName.equals("")) {
+            network!!.kitName
+        } else "BitcoinKit"}:0.5.0/"
     }
 
     fun hasBlockChain(network: Network): Boolean {
