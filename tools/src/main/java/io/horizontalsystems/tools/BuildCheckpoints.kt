@@ -106,8 +106,8 @@ class BuildCheckpoints : CheckpointSyncer.Listener {
             is TestNet -> "bitcoinkit"
             is MainNetBitcoinCash,
             is TestNetBitcoinCash -> "bitcoincashkit"
-            //is MainNetDash,
-            //is TestNetDash -> "dashkit"
+            is MainNetDash,
+            is TestNetDash -> "dashkit"
             is MainNetGroestlcoin, is TestNetGroestlcoin -> "groestlcoinkit"
             is MainNetLitecoin,
             is TestNetLitecoin -> "litecoinkit"
