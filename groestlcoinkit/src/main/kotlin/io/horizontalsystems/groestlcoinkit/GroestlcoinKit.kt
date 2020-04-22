@@ -64,11 +64,11 @@ class GroestlcoinKit : AbstractKit {
 
         network = when (networkType) {
             NetworkType.MainNet -> {
-                initialSyncUrl = "https://chainz.cryptoid.info/grs/api.dws?key=d47da926b82e&q="
+                initialSyncUrl = "https://chainz.cryptoid.info/grs"
                 MainNetGroestlcoin()
             }
             NetworkType.TestNet -> {
-                initialSyncUrl = "https://chainz.cryptoid.info/grs-test/api.dws?key=d47da926b82e&q="
+                initialSyncUrl = "https://chainz.cryptoid.info/grs-test"
                 TestNetGroestlcoin()
             }
         }
