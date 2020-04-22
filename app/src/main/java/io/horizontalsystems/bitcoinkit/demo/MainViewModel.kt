@@ -11,13 +11,13 @@ import io.horizontalsystems.bitcoincore.models.BalanceInfo
 import io.horizontalsystems.bitcoincore.models.BlockInfo
 import io.horizontalsystems.bitcoincore.models.TransactionDataSortType
 import io.horizontalsystems.bitcoincore.models.TransactionInfo
-import io.horizontalsystems.bitcoinkit.BitcoinKit
+import io.horizontalsystems.groestlcoinkit.GroestlcoinKit
 import io.horizontalsystems.hodler.HodlerData
 import io.horizontalsystems.hodler.HodlerPlugin
 import io.horizontalsystems.hodler.LockTimeInterval
 import io.reactivex.disposables.CompositeDisposable
 
-class MainViewModel : ViewModel(), BitcoinKit.Listener {
+class MainViewModel : ViewModel(), GroestlcoinKit.Listener {
 
     enum class State {
         STARTED, STOPPED
@@ -37,10 +37,10 @@ class MainViewModel : ViewModel(), BitcoinKit.Listener {
             status.value = (if (value) State.STARTED else State.STOPPED)
         }
 
-    private lateinit var bitcoinKit: BitcoinKit
+    private lateinit var bitcoinKit: GroestlcoinKit
 
     private val walletId = "MyWallet"
-    private val networkType = BitcoinKit.NetworkType.MainNet
+    private val networkType = GroestlcoinKit.NetworkType.MainNet
     private val syncMode = BitcoinCore.SyncMode.Api()
     private val bip = Bip.BIP44
 
@@ -51,7 +51,7 @@ class MainViewModel : ViewModel(), BitcoinKit.Listener {
     private fun init() {
          val words = "used ugly meat glad balance divorce inner artwork hire invest already piano".split(" ")
 
-        bitcoinKit = BitcoinKit(App.instance, words, walletId, networkType, syncMode = syncMode, bip = bip)
+        bitcoinKit = GroestlcoinKit(App.instance, words, walletId, networkType, syncMode = syncMode, bip = bip)
 
         bitcoinKit.listener = this
 
@@ -79,7 +79,7 @@ class MainViewModel : ViewModel(), BitcoinKit.Listener {
 
     fun clear() {
         bitcoinKit.stop()
-        BitcoinKit.clear(App.instance, networkType, walletId)
+        GroestlcoinKit.clear(App.instance, networkType, walletId)
 
         init()
     }
